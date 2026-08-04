@@ -10,18 +10,23 @@ export function ProjectArea() {
   return (
     <div
       style={{
-        padding: 'var(--cron-space-sm) var(--cron-space-md)',
-        borderBottom: '1px solid var(--cron-shell-border)',
-        color: 'var(--cron-shell-text-muted)',
+        padding: '6px 14px',
+        borderBottom: '1px solid var(--cron-panel-border)',
+        color: 'var(--cron-panel-text-muted)',
         fontSize: 'var(--cron-font-size-sm)',
         fontFamily: 'var(--cron-font-family)',
-        background: 'var(--cron-shell-bg)',
+        background: 'var(--cron-panel-bg)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        flexShrink: 0,
+        userSelect: 'none',
       }}
     >
-      <span style={{ fontWeight: 500, color: 'var(--cron-shell-text)' }}>
+      <span style={{ fontWeight: 600, color: 'var(--cron-accent)' }}>
         {activeProject.name}
       </span>
-      <span style={{ marginLeft: 'var(--cron-space-md)' }}>
+      <span style={{ color: 'var(--cron-panel-text-muted)', fontSize: 'var(--cron-font-size-xs)', opacity: 0.7 }}>
         {activeProject.rootPath}
       </span>
     </div>

@@ -23,6 +23,7 @@ export function TaskWorkspace() {
               fontSize: 'var(--cron-font-size-xl)',
               margin: 0,
               marginBottom: 'var(--cron-space-sm)',
+              color: '#e2e8f0',
             }}
           >
             {selectedTask.title}
@@ -32,20 +33,23 @@ export function TaskWorkspace() {
               fontSize: 'var(--cron-font-size-sm)',
               color: 'var(--cron-text-tertiary)',
               marginBottom: 'var(--cron-space-md)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
             }}
           >
-            Status:{' '}
+            <span>Status:</span>
             <StatusBadge status={selectedTask.status} />
           </div>
           {selectedTask.error && (
             <div
               style={{
-                background: '#fff1f0',
-                border: '1px solid #ffa39e',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
                 borderRadius: 'var(--cron-border-radius-sm)',
                 padding: 'var(--cron-space-md)',
                 marginBottom: 'var(--cron-space-md)',
-                color: '#cf1322',
+                color: '#fca5a5',
                 fontSize: 'var(--cron-font-size-md)',
               }}
             >

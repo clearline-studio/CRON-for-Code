@@ -64,6 +64,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     show: false,
+    autoHideMenuBar: true,
     title: 'CRON for Code',
     backgroundColor: '#0d1117',
     icon: ICON_PATH,

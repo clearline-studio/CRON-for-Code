@@ -9,11 +9,10 @@ export function TaskComposer() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const trimmedTitle = title.trim();
-    const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt) return;
-
-    raw.getState().createDraftTask(trimmedTitle || 'Untitled', trimmedPrompt);
+    const t = title.trim();
+    const p = prompt.trim();
+    if (!p) return;
+    raw.getState().createDraftTask(t || 'Untitled', p);
     setTitle('');
     setPrompt('');
   }
@@ -23,9 +22,10 @@ export function TaskComposer() {
       onSubmit={handleSubmit}
       style={{
         borderTop: '1px solid var(--cron-surface-border)',
-        background: 'var(--cron-surface-bg)',
+        background: 'var(--cron-panel-bg)',
         padding: 'var(--cron-space-md)',
         fontFamily: 'var(--cron-font-family)',
+        flexShrink: 0,
       }}
     >
       <input
@@ -33,56 +33,17 @@ export function TaskComposer() {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Task title (optional)"
-        style={{
-          width: '100%',
-          border: '1px solid var(--cron-surface-border)',
-          borderRadius: 'var(--cron-border-radius-sm)',
-          padding: 'var(--cron-space-sm)',
-          fontSize: 'var(--cron-font-size-md)',
-          marginBottom: 'var(--cron-space-sm)',
-          background: 'var(--cron-surface-bg)',
-          color: 'var(--cron-text-primary)',
-          fontFamily: 'var(--cron-font-family)',
-          boxSizing: 'border-box',
-        }}
+        style={fieldStyle}
       />
       <div style={{ display: 'flex', gap: 'var(--cron-space-sm)' }}>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Describe your task... (Draft — not sent)"
+          placeholder="Describe your task..."
           rows={3}
-          style={{
-            flex: 1,
-            border: '1px solid var(--cron-surface-border)',
-            borderRadius: 'var(--cron-border-radius-sm)',
-            padding: 'var(--cron-space-sm)',
-            fontSize: 'var(--cron-font-size-md)',
-            resize: 'vertical',
-            background: 'var(--cron-surface-bg)',
-            color: 'var(--cron-text-primary)',
-            fontFamily: 'var(--cron-font-family)',
-          }}
+          style={{ ...fieldStyle, resize: 'vertical' as const, flex: 1, padding: '8px 10px' }}
         />
-        <button
-          type="submit"
-          disabled={!prompt.trim()}
-          style={{
-            alignSelf: 'flex-end',
-            padding: 'var(--cron-space-sm) var(--cron-space-md)',
-            background: 'var(--cron-accent)',
-            color: 'var(--cron-text-inverse)',
-            border: 'none',
-            borderRadius: 'var(--cron-border-radius-sm)',
-            cursor: prompt.trim() ? 'pointer' : 'not-allowed',
-            opacity: prompt.trim() ? 1 : 0.5,
-            fontFamily: 'var(--cron-font-family)',
-            fontSize: 'var(--cron-font-size-md)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
+        <button type="submit" disabled={!prompt.trim()} style={draftBtnStyle}>
           <Send size={14} />
           Draft
         </button>
@@ -90,3 +51,34 @@ export function TaskComposer() {
     </form>
   );
 }
+
+const fieldStyle: React.CSSProperties = {
+  width: '100%',
+  border: '1px solid var(--cron-surface-border)',
+  borderRadius: 5,
+  padding: '6px 10px',
+  fontSize: 'var(--cron-font-size-md)',
+  marginBottom: 'var(--cron-space-sm)',
+  background: 'var(--cron-surface-bg)',
+  color: 'var(--cron-text-primary)',
+  fontFamily: 'var(--cron-font-family)',
+  boxSizing: 'border-box',
+  outline: 'none',
+};
+
+const draftBtnStyle: React.CSSProperties = {
+  alignSelf: 'flex-end',
+  padding: '6px 14px',
+  background: 'var(--cron-accent)',
+  color: 'var(--cron-text-inverse)',
+  border: 'none',
+  borderRadius: 5,
+  cursor: 'pointer',
+  opacity: 1,
+  fontFamily: 'var(--cron-font-family)',
+  fontSize: 'var(--cron-font-size-md)',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  fontWeight: 500,
+};
