@@ -1,0 +1,4 @@
+:root {
+  --cron-shell-bg-image: url('./cron_shell_background.png');
+  --cron-logo-url: url('./code_logo.png');
+}

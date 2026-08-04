@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "shared/*"
+allowBuilds:
+  electron: true
+  esbuild: true

@@ -1,0 +1,26 @@
+{
+  "name": "cron-for-code",
+  "private": true,
+  "description": "CRON for Code — governed AI coding workspace",
+  "scripts": {
+    "dev": "pnpm --filter @cron-code/standalone dev",
+    "build": "pnpm -r --filter !@cron-code/standalone run build && pnpm --filter @cron-code/standalone build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "eslint . --ext .ts,.tsx,.mjs,.cjs",
+    "clean": "node -e \"require('fs').rmSync('packages/core/dist',{recursive:true,force:true});require('fs').rmSync('packages/contracts/dist',{recursive:true,force:true});require('fs').rmSync('packages/data-service/dist',{recursive:true,force:true});require('fs').rmSync('packages/host-adapter/dist',{recursive:true,force:true});require('fs').rmSync('apps/standalone/dist-renderer',{recursive:true,force:true})\"",
+    "format:check": "pnpm -r run format:check"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@11.18.0",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript-eslint": "^8.65.0"
+  }
+}

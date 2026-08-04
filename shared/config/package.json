@@ -1,0 +1,15 @@
+{
+  "name": "@cron-code/shared-config",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "echo ok",
+    "test": "echo ok",
+    "build": "echo ok",
+    "format:check": "echo ok"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

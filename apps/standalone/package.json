@@ -1,0 +1,74 @@
+{
+  "name": "@cron-code/standalone",
+  "version": "0.1.3",
+  "description": "CRON for Code — governed AI coding workspace (standalone Electron app)",
+  "author": "CRON for Code",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build",
+    "start": "electron .",
+    "package": "electron-builder --win",
+    "typecheck": "tsc --noEmit",
+    "test": "echo ok",
+    "lint": "echo ok",
+    "format:check": "echo ok"
+  },
+  "dependencies": {
+    "@cron-code/contracts": "workspace:*",
+    "@cron-code/core": "workspace:*",
+    "@cron-code/data-service": "workspace:*",
+    "@cron-code/design-tokens": "workspace:*",
+    "@cron-code/host-adapter": "workspace:*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12",
+    "sharp": "^0.35.3",
+    "to-ico": "^1.1.5",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0"
+  },
+  "build": {
+    "appId": "ai.cron-code.standalone",
+    "productName": "CRON for Code",
+    "icon": "branding/assets/code_icon.ico",
+    "directories": {
+      "output": "${env.USERPROFILE}/Desktop"
+    },
+    "win": {
+      "icon": "branding/assets/code_icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "branding/assets/code_icon.ico",
+      "uninstallerIcon": "branding/assets/code_icon.ico",
+      "include": "installer.nsh"
+    },
+    "files": [
+      "dist-renderer/**/*",
+      "electron/**/*",
+      "branding/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
+  }
+}
