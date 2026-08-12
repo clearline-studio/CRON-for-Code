@@ -5,6 +5,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Generated renderer output (apps/standalone Vite build)
+apps/standalone/dist-renderer/
+
 # IDE
 .vscode/
 .idea/
@@ -25,7 +28,12 @@ Thumbs.db
 *.key
 credentials*
 secret*
-*token*
+*.token
+token*.json
+.tokens*
+
+# Runtime logs
+.runtime/
 
 # Test
 coverage/

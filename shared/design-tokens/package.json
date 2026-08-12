@@ -1,0 +1,13 @@
+{
+  "name": "@cron-code/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.css",
+  "scripts": {
+    "typecheck": "echo ok",
+    "lint": "echo ok",
+    "test": "echo ok",
+    "build": "echo ok",
+    "format:check": "echo ok"
+  }
+}

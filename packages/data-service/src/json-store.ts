@@ -1,8 +1,24 @@
 import { readFile, writeFile, rename, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { CodeProject, Task, Approval } from '@cron-code/contracts';
-import { updateTaskStatus, resolveApproval } from '@cron-code/contracts';
-import type { DataService, DataServiceConfig } from './types.js';
+import type {
+  CodeProject,
+  ProjectAvailability,
+  Task,
+  Approval,
+  ExecutionRecord,
+  AuditRecord,
+} from '@cron-code/contracts';
+import {
+  updateTaskStatus,
+  resolveApproval,
+  archiveCodeProject,
+  restoreCodeProject,
+  relinkCodeProject,
+  renameCodeProject,
+  withAvailability,
+} from '@cron-code/contracts';
+import type { DataService, DataServiceConfig, CommandSummary } from './types.js';
+import { buildCommandCatalogue } from './command-catalogue.js';
 import { logger } from './logger.js';
 
 interface StoreSchema {
@@ -10,11 +26,21 @@ interface StoreSchema {
   projects: Record<string, CodeProject>;
   tasks: Record<string, Task>;
   approvals: Record<string, Approval>;
+  executions: Record<string, ExecutionRecord>;
+  audit: AuditRecord[];
   preferences: Record<string, string>;
 }
 
 function emptySchema(): StoreSchema {
-  return { version: 1, projects: {}, tasks: {}, approvals: {}, preferences: {} };
+  return {
+    version: 1,
+    projects: {},
+    tasks: {},
+    approvals: {},
+    executions: {},
+    audit: [],
+    preferences: {},
+  };
 }
 
 export function createJsonDataService(config: DataServiceConfig): DataService {
@@ -51,8 +77,24 @@ export function createJsonDataService(config: DataServiceConfig): DataService {
         projects: parsed.projects ?? {},
         tasks: parsed.tasks ?? {},
         approvals: parsed.approvals ?? {},
+        executions: parsed.executions ?? {},
+        audit: Array.isArray(parsed.audit) ? parsed.audit : [],
         preferences: parsed.preferences ?? {},
       };
+      for (const [id, project] of Object.entries(store.projects)) {
+        let changed = false;
+        if (!('availability' in project) || project.availability === undefined) {
+          (project as CodeProject).availability = 'available';
+          changed = true;
+        }
+        if (!('archived' in project) || (project as CodeProject).archived === undefined) {
+          (project as CodeProject).archived = false;
+          changed = true;
+        }
+        if (changed) {
+          store.projects[id] = project as CodeProject;
+        }
+      }
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         store = emptySchema();
@@ -136,6 +178,18 @@ export function createJsonDataService(config: DataServiceConfig): DataService {
       await flush();
     },
 
+    async listCommands(): Promise<CommandSummary[]> {
+      return buildCommandCatalogue().map((entry) => ({
+        id: entry.id,
+        displayCommand: entry.displayTemplate,
+        category: entry.category,
+        risk: entry.risk,
+        readOnly: entry.readOnly,
+        requiresApproval: entry.requiresApproval,
+        timeoutMs: entry.timeoutMs,
+      }));
+    },
+
     projects: {
       async list() {
         return Object.values(store.projects);
@@ -150,6 +204,46 @@ export function createJsonDataService(config: DataServiceConfig): DataService {
       async delete(id) {
         delete store.projects[id];
         await persist();
+      },
+      async archive(id) {
+        const project = store.projects[id];
+        if (!project) return null;
+        const next = archiveCodeProject(project);
+        store.projects[id] = next;
+        await persist();
+        return next;
+      },
+      async unarchive(id) {
+        const project = store.projects[id];
+        if (!project) return null;
+        const next = restoreCodeProject(project);
+        store.projects[id] = next;
+        await persist();
+        return next;
+      },
+      async setRootPath(id, rootPath) {
+        const project = store.projects[id];
+        if (!project) return null;
+        const next = relinkCodeProject(project, rootPath);
+        store.projects[id] = next;
+        await persist();
+        return next;
+      },
+      async setName(id, name) {
+        const project = store.projects[id];
+        if (!project) return null;
+        const next = renameCodeProject(project, name);
+        store.projects[id] = next;
+        await persist();
+        return next;
+      },
+      async setAvailability(id, availability: ProjectAvailability) {
+        const project = store.projects[id];
+        if (!project) return null;
+        const next = withAvailability(project, availability);
+        store.projects[id] = next;
+        await persist();
+        return next;
       },
     },
 
@@ -183,7 +277,13 @@ export function createJsonDataService(config: DataServiceConfig): DataService {
         store.tasks[id] = updateTaskStatus(task, 'queued');
         await persist();
       },
-      async runNow(_id) {
+      async runNow(id, _commandId) {
+        // Data-layer intent marker: queues the task so the execution service
+        // (approval → harness) can pick it up. Not a no-op.
+        const task = store.tasks[id];
+        if (!task) return;
+        store.tasks[id] = updateTaskStatus(task, 'queued');
+        await persist();
       },
     },
 
@@ -210,6 +310,56 @@ export function createJsonDataService(config: DataServiceConfig): DataService {
         if (!approval) return;
         store.approvals[id] = resolveApproval(approval, status, reason);
         await persist();
+      },
+    },
+
+    executions: {
+      async list(projectId) {
+        return Object.values(store.executions)
+          .filter((e) => e.projectId === projectId)
+          .sort((a, b) => b.startedAt - a.startedAt);
+      },
+      async listAll() {
+        return Object.values(store.executions).sort((a, b) => b.startedAt - a.startedAt);
+      },
+      async get(id) {
+        return store.executions[id] ?? null;
+      },
+      async save(record) {
+        store.executions[record.id] = record;
+        await persist();
+      },
+      async cancel(id) {
+        const record = store.executions[id];
+        if (!record) return;
+        store.executions[id] = {
+          ...record,
+          cancellation: {
+            requested: true,
+            requestedAt: record.cancellation.requestedAt ?? Date.now(),
+          },
+        };
+        await persist();
+      },
+    },
+
+    audit: {
+      async append(record) {
+        store.audit.push(record);
+        await persist();
+      },
+      async list(filter) {
+        const rows = [...store.audit];
+        if (filter?.taskId) {
+          return rows.filter((r) => r.taskId === filter.taskId);
+        }
+        if (filter?.projectId) {
+          return rows.filter((r) => r.projectId === filter.projectId);
+        }
+        if (filter?.executionId) {
+          return rows.filter((r) => r.executionId === filter.executionId);
+        }
+        return rows;
       },
     },
 

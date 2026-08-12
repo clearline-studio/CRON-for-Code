@@ -26,7 +26,7 @@ function createMockExecutor(result?: { exitCode: number; stdout: string; stderr:
 }
 
 function createMockDataService(taskOverrides: Partial<Task> = {}, approvals: Approval[] = []) {
-  let taskStore: Record<string, Task> = {
+  const taskStore: Record<string, Task> = {
     t1: makeTask(taskOverrides),
   };
 

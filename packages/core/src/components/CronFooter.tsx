@@ -1,17 +1,18 @@
 import { type CSSProperties } from 'react';
 
 export function CronFooter() {
+  const placeholderTabs = ['PowerShell', 'Git', 'Tests', 'Build', 'Verification', 'Logs'];
   return (
     <div style={footerStyle}>
       <div style={leftGroupStyle}>
         <span style={brandStyle}>Made for CRON</span>
         <span style={sepStyle}>|</span>
-        <span style={mutedStyle}>PowerShell</span>
-        <span style={mutedStyle}>Git</span>
-        <span style={mutedStyle}>Tests</span>
-        <span style={mutedStyle}>Build</span>
-        <span style={mutedStyle}>Verification</span>
-        <span style={mutedStyle}>Logs</span>
+        {placeholderTabs.map((tab) => (
+          <span key={tab} style={tabStyle}>
+            {tab}
+            <span style={devBadgeStyle} aria-label={`${tab} not implemented`}>DEV</span>
+          </span>
+        ))}
       </div>
       <div style={{ flex: 1 }} />
       <span style={statusDotStyle} />
@@ -51,9 +52,25 @@ const sepStyle: CSSProperties = {
   color: 'var(--cron-panel-border)',
 };
 
-const mutedStyle: CSSProperties = {
+// Placeholder tabs: not implemented yet - shown truthfully with a red DEV badge
+// instead of looking like working features.
+const tabStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
   opacity: 0.45,
   cursor: 'default',
+};
+
+const devBadgeStyle: CSSProperties = {
+  padding: '1px 4px',
+  border: '1px solid rgba(239,68,68,.8)',
+  color: '#ff6b6b',
+  background: 'rgba(120,12,22,.25)',
+  fontSize: 7,
+  fontWeight: 700,
+  letterSpacing: 0.7,
+  borderRadius: 3,
 };
 
 const statusDotStyle: CSSProperties = {

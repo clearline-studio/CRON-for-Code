@@ -1,10 +1,18 @@
 import { type CSSProperties } from 'react';
-import { Activity, RefreshCw } from 'lucide-react';
+import { Activity, Loader2, RefreshCw } from 'lucide-react';
+import { useWorkspaceStore, useWorkspaceStoreRaw } from '../context.js';
 
 export function CronHeader() {
   const logoStyle = getComputedStyle(document.documentElement).getPropertyValue('--cron-logo-url').trim();
   const hasLogo = logoStyle && logoStyle !== 'none';
   const logoSrc = hasLogo ? logoStyle.replace(/^url\(["']?/, '').replace(/["']?\)$/, '') : '';
+  const isRestarting = useWorkspaceStore((s) => s.isRestarting);
+  const raw = useWorkspaceStoreRaw();
+
+  function handleRestart() {
+    if (isRestarting) return;
+    void raw.getState().restartApp();
+  }
 
   return (
     <div style={headerStyle}>
@@ -16,25 +24,36 @@ export function CronHeader() {
         ) : (
           <span style={logoTextStyle}>CRON for Code</span>
         )}
-        <div style={subtitleStyle}>Agent-safe coding shell</div>
       </div>
       <div style={rightStyle}>
-        <button
-          style={statusBtnStyle}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(34, 197, 94, 0.10)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(34, 197, 94, 0.04)'; }}
+        <div
+          role="status"
+          aria-live="polite"
+          style={statusPillStyle}
+          data-testid="cron-online-status"
         >
           <Activity size={15} />
-          <span style={{ marginLeft: 8 }}>CRON Online</span>
+          <span style={{ marginLeft: 8 }}>{isRestarting ? 'Restarting…' : 'CRON Online'}</span>
           <span style={greenDot} />
-        </button>
+        </div>
         <button
-          style={restartBtnStyle}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(59, 130, 246, 0.14)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--cron-accent-subtle)'; }}
+          style={restartBtnStyle(isRestarting)}
+          disabled={isRestarting}
+          aria-busy={isRestarting}
+          aria-label={isRestarting ? 'Restarting CRON for Code' : 'Restart CRON for Code'}
+          onClick={handleRestart}
+          onMouseEnter={(e) => {
+            if (isRestarting) return;
+            (e.currentTarget as HTMLElement).style.background = 'rgba(59, 130, 246, 0.14)';
+          }}
+          onMouseLeave={(e) => {
+            if (isRestarting) return;
+            (e.currentTarget as HTMLElement).style.background = 'var(--cron-accent-subtle)';
+          }}
+          data-testid="cron-restart-button"
         >
-          <RefreshCw size={15} />
-          <span style={{ marginLeft: 8 }}>CRON Restart</span>
+          {isRestarting ? <Loader2 size={15} /> : <RefreshCw size={15} />}
+          <span style={{ marginLeft: 8 }}>{isRestarting ? 'Restarting…' : 'CRON Restart'}</span>
         </button>
       </div>
       <div style={glowStyle} />
@@ -48,7 +67,7 @@ const headerStyle: CSSProperties = {
   justifyContent: 'space-between',
   height: 'var(--cron-header-height)',
   background: 'var(--cron-header-bg)',
-  padding: '0 36px',
+  padding: '0 24px',
   borderBottom: '2px solid var(--cron-panel-border)',
   flexShrink: 0,
   userSelect: 'none',
@@ -59,7 +78,7 @@ const headerStyle: CSSProperties = {
 const leftStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
+  gap: 0,
 };
 
 const logoWrapStyle: CSSProperties = {
@@ -68,10 +87,10 @@ const logoWrapStyle: CSSProperties = {
 };
 
 const logoImgStyle: CSSProperties = {
-  width: 220,
+  width: 190,
   height: 'auto',
   objectFit: 'contain',
-  transform: 'translateY(14px)',
+  transform: 'translateY(10px)',
 };
 
 const logoTextStyle: CSSProperties = {
@@ -79,16 +98,6 @@ const logoTextStyle: CSSProperties = {
   fontSize: 26,
   fontWeight: 700,
   fontFamily: 'var(--cron-font-family)',
-};
-
-const subtitleStyle: CSSProperties = {
-  color: '#5f7392',
-  fontSize: 'var(--cron-font-size-sm)',
-  fontFamily: 'var(--cron-font-family)',
-  fontWeight: 400,
-  letterSpacing: 1.5,
-  textTransform: 'uppercase',
-  marginTop: 2,
 };
 
 const rightStyle: CSSProperties = {
@@ -101,9 +110,9 @@ const rightStyle: CSSProperties = {
 const buttonBase: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  minHeight: 44,
-  padding: '12px 24px',
-  borderRadius: 6,
+  minHeight: 40,
+  padding: '9px 17px',
+  borderRadius: 10,
   border: '1px solid transparent',
   cursor: 'pointer',
   fontSize: 'var(--cron-font-size-md)',
@@ -112,19 +121,31 @@ const buttonBase: CSSProperties = {
   transition: 'background 0.15s',
 };
 
-const statusBtnStyle: CSSProperties = {
-  ...buttonBase,
+// Status indicator only - NOT clickable (no button semantics, no hover).
+const statusPillStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  minHeight: 40,
+  padding: '9px 17px',
+  borderRadius: 10,
+  border: '1px solid rgba(34, 197, 94, 0.15)',
   background: 'rgba(34, 197, 94, 0.04)',
   color: '#22c55e',
-  borderColor: 'rgba(34, 197, 94, 0.15)',
+  fontSize: 'var(--cron-font-size-md)',
+  fontFamily: 'var(--cron-font-family)',
+  fontWeight: 500,
+  cursor: 'default',
+  userSelect: 'none',
 };
 
-const restartBtnStyle: CSSProperties = {
+const restartBtnStyle = (isRestarting: boolean): CSSProperties => ({
   ...buttonBase,
-  background: 'var(--cron-accent-subtle)',
-  color: '#60a5fa',
+  background: isRestarting ? 'rgba(59, 130, 246, 0.22)' : 'var(--cron-accent-subtle)',
+  color: isRestarting ? '#bfdbfe' : '#60a5fa',
   borderColor: 'rgba(59, 130, 246, 0.15)',
-};
+  cursor: isRestarting ? 'wait' : 'pointer',
+  opacity: isRestarting ? 0.85 : 1,
+});
 
 const greenDot: CSSProperties = {
   display: 'inline-block',

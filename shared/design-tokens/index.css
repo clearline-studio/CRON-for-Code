@@ -1,0 +1,129 @@
+:root {
+  --cron-app-bg: #050812;
+
+  /* Shell */
+  --cron-shell-bg: #050812;
+  --cron-shell-bg-image: none;
+  --cron-shell-surface: #0b1628;
+  --cron-shell-border: #12254a;
+  --cron-shell-text: #eaf2ff;
+  --cron-shell-text-muted: #5f7392;
+
+  /* Branding */
+  --cron-logo-url: none;
+
+  /* Deep CRON palette */
+  --cron-blue-950: #030712;
+  --cron-blue-900: #060f24;
+  --cron-blue-850: #091730;
+  --cron-blue-800: #0c1c3a;
+  --cron-blue-700: #102244;
+  --cron-blue-600: #142a54;
+  --cron-blue-accent: #3b82f6;
+  --cron-blue-glow: rgba(72, 145, 255, 0.55);
+  --cron-cyan: #38bdf8;
+
+  /* Header */
+  --cron-header-bg: linear-gradient(to bottom, #0a1428, #060f24);
+  --cron-header-height: 104px;
+  --cron-nav-bg: #0c1a30;
+  --cron-nav-height: 52px;
+
+  /* Panels */
+  --cron-panel-bg: #0b1628;
+  --cron-panel-border: rgba(80, 140, 220, 0.28);
+  --cron-panel-text: #eaf2ff;
+  --cron-panel-text-muted: #5f7392;
+
+  /* Footer */
+  --cron-footer-bg: #060f24;
+  --cron-footer-height: 26px;
+
+  /* Workspace surfaces */
+  --cron-surface-bg: #0d1b31;
+  --cron-surface-secondary: #0f1e36;
+  --cron-surface-border: rgba(80, 140, 220, 0.22);
+
+  /* Text */
+  --cron-text-primary: #eaf2ff;
+  --cron-text-secondary: #8da4c7;
+  --cron-text-tertiary: #5f7392;
+  --cron-text-inverse: #050812;
+
+  /* Status */
+  --cron-status-draft: #5f7392;
+  --cron-status-running: #3b82f6;
+  --cron-status-completed: #22c55e;
+  --cron-status-error: #ef4444;
+  --cron-status-warning: #f59e0b;
+
+  /* Interactive */
+  --cron-accent: #3b82f6;
+  --cron-accent-hover: #60a5fa;
+  --cron-accent-subtle: rgba(59, 130, 246, 0.12);
+
+  /* Borders */
+  --cron-border-radius-sm: 4px;
+  --cron-border-radius-md: 6px;
+  --cron-border-radius-lg: 8px;
+
+  /* Spacing */
+  --cron-space-xs: 4px;
+  --cron-space-sm: 8px;
+  --cron-space-md: 16px;
+  --cron-space-lg: 24px;
+  --cron-space-xl: 32px;
+
+  /* Typography */
+  --cron-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --cron-font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --cron-font-size-xs: 10px;
+  --cron-font-size-sm: 12px;
+  --cron-font-size-md: 14px;
+  --cron-font-size-lg: 16px;
+  --cron-font-size-xl: 22px;
+  --cron-line-height: 1.5;
+}
+
+* {
+  scrollbar-color: #173a73 #061226;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #061226;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #173a73;
+  border: 2px solid #061226;
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #24539b;
+}
+
+@keyframes cron-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Presentation-only reveal for live activity steps. Delays are applied per
+   index in the component so a fast burst of backend events still reads as a
+   progression instead of a single dump. Never delays the backend itself. */
+@keyframes cron-trail-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

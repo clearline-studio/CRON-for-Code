@@ -1,4 +1,4 @@
-export type TaskStatus = 'draft' | 'queued' | 'approval_required' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskStatus = 'draft' | 'queued' | 'approval_required' | 'running' | 'completed' | 'failed' | 'blocked' | 'cancelled';
 
 export interface Task {
   id: string;
@@ -41,7 +41,7 @@ export function updateTaskStatus(task: Task, status: TaskStatus, error?: string)
   if (status === 'running' && task.startedAt === null) {
     patch.startedAt = now;
   }
-  if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+  if (status === 'completed' || status === 'failed' || status === 'blocked' || status === 'cancelled') {
     patch.completedAt = now;
   }
   if (error !== undefined) {
