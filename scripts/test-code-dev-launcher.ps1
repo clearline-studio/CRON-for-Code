@@ -272,8 +272,9 @@ Assert-True ($vbs -notmatch 'CRON_CODE_DEV_PORT') 'VBS has no temporary terminal
 Assert-True ($vbs -notmatch 'CRON_DEV') 'VBS does not depend on a terminal-set environment variable'
 Assert-True ($bat -match '%~dp0') 'BAT resolves repo root dynamically'
 
-Assert-True ($shortcutScript -match 'launch-cron-for-code-dev\.vbs') 'shortcut creator targets the silent VBS wrapper'
-Assert-True ($shortcutScript -match '\$shortcut\.WorkingDirectory = \$repoRoot') 'shortcut uses the repo root as working directory'
+Assert-True ($shortcutScript -match 'electron\.exe') 'shortcut creator targets electron.exe directly (single taskbar identity)'
+Assert-True ($shortcutScript -notmatch 'launch-cron-for-code-dev') 'shortcut creator does not target the VBS launcher'
+Assert-True ($shortcutScript -match '\$shortcut\.WorkingDirectory = \$standaloneDir') 'shortcut runs Electron from the standalone app directory'
 Assert-True ($shortcutScript -match 'code_icon\.ico') 'shortcut uses the CRON for Code icon'
 Assert-True ($shortcutScript -notmatch 'CRON_CODE_DEV_PORT') 'shortcut does not embed a temporary environment variable'
 Assert-True ($shortcutScript -match '\$shell\.CreateShortcut') 'shortcut creator builds a .lnk (not an auto-pin action)'

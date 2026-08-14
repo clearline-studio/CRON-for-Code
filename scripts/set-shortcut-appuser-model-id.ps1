@@ -1,9 +1,16 @@
 # CRON for Code - set System.AppUserModel.ID on a shortcut (.lnk) by writing the
-# PropertyStoreDataBlock (MS-SHLLINK extra-data signature 0xA0000001) directly.
-# The shell's IPropertyStore refuses SetValue on .lnk files, so this is the
-# documented serialized-property-storage layout, appended after the string data.
-# Grouping fix: Windows groups the running window (AUMID com.cron.code.dev set by
-# main.mjs) under the pinned shortcut ONLY when the shortcut carries the same ID.
+# PropertyStoreDataBlock (MS-SHLLINK extra-data signature 0xA0000007) directly.
+#
+# NOTE (2026-08-13, verified on this Windows 11 build): this property-store
+# approach is NOT what groups classic-exe taskbar buttons on this OS. Windows
+# writes an icon-path blob into pinned shortcuts instead of an AppUserModelID
+# property, and IPropertyStore refuses SetValue (0x80030005) on .lnk files, and
+# the shell does not round-trip AppUserModelID from written blocks. The working
+# fix for CRON for Code is the direct electron.exe shortcut target
+# (see create-code-dev-shortcut.ps1) + implicit AUMID in main.mjs.
+# This script remains as the CORRECT layout (verified against the LECmd parser,
+# which mirrors MS-SHLLINK/MS-PROPSTORE) for systems where the property store
+# IS honoured.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -19,51 +26,36 @@ if (-not (Test-Path -LiteralPath $ShortcutPath)) {
 
 $bytes = [System.IO.File]::ReadAllBytes($ShortcutPath)
 
-function Read-UInt32([byte[]]$b, [int]$offset) {
-    return [System.BitConverter]::ToUInt32($b, $offset)
-}
 function Read-UInt16([byte[]]$b, [int]$offset) {
     return [System.BitConverter]::ToUInt16($b, $offset)
+}
+function Read-UInt32([byte[]]$b, [int]$offset) {
+    return [System.BitConverter]::ToUInt32($b, $offset)
 }
 
 # --- Parse the .lnk to locate the ExtraData section (MS-SHLLINK) ---
 if ($bytes.Length -lt 76) { throw 'Shortcut file is too small to be a valid .lnk' }
 
 $linkFlags = Read-UInt32 $bytes 20
-$hasIdList = ($linkFlags -band 0x1) -ne 0
-$hasLinkInfo = ($linkFlags -band 0x2) -ne 0
-$hasName = ($linkFlags -band 0x4) -ne 0
-$hasRelativePath = ($linkFlags -band 0x8) -ne 0
-$hasWorkingDir = ($linkFlags -band 0x10) -ne 0
-$hasArguments = ($linkFlags -band 0x20) -ne 0
-$hasIconLocation = ($linkFlags -band 0x40) -ne 0
-$isUnicode = ($linkFlags -band 0x80) -ne 0
 
 $pos = 76
-
-if ($hasIdList) {
+if (($linkFlags -band 0x1) -ne 0) {
     if ($pos + 2 -gt $bytes.Length) { throw 'Truncated ID list' }
-    $idListSize = Read-UInt16 $bytes $pos
-    $pos += 2 + $idListSize
+    $pos += 2 + (Read-UInt16 $bytes $pos)
 }
-
-if ($hasLinkInfo) {
+if (($linkFlags -band 0x2) -ne 0) {
     if ($pos + 4 -gt $bytes.Length) { throw 'Truncated link info' }
     $linkInfoSize = Read-UInt32 $bytes $pos
     if ($linkInfoSize -lt 4) { throw 'Invalid link info size' }
     $pos += $linkInfoSize
 }
-
-# Skip string data (WScript.Shell writes Unicode strings).
-foreach ($flag in @(@($hasName, 0x4), @($hasRelativePath, 0x8), @($hasWorkingDir, 0x10), @($hasArguments, 0x20), @($hasIconLocation, 0x40))) {
-    if (-not $flag[0]) { continue }
+foreach ($flag in 0x4, 0x8, 0x10, 0x20, 0x40) {
+    if (($linkFlags -band $flag) -eq 0) { continue }
     if ($pos + 2 -gt $bytes.Length) { throw 'Truncated string data' }
     $charCount = Read-UInt16 $bytes $pos
-    $bytesForChars = $charCount * ($(if ($isUnicode) { 2 } else { 1 }))
+    $bytesForChars = $charCount * $(if (($linkFlags -band 0x80) -ne 0) { 2 } else { 1 })
     $pos += 2 + $bytesForChars
 }
-
-# Walk existing extra-data blocks to their terminator.
 while ($true) {
     if ($pos + 4 -gt $bytes.Length) { throw 'Shortcut has no extra-data terminator' }
     $blockSize = Read-UInt32 $bytes $pos
@@ -71,50 +63,47 @@ while ($true) {
     $pos += $blockSize
 }
 
-# --- Build the PropertyStoreDataBlock (AppUserModelID, VT_LPWSTR) ---
+# --- Build the numeric (PKEY) serialized property storage ---
+# Verified layout (LECmd/ExtensionBlocks parser, MS-SHLLINK 2.4.4 + MS-PROPSTORE):
+#   storage   : [DWORD sheetSize][sheet]
+#   sheet     : [DWORD sheetSize]["1SPS"][fmtid GUID][value][DWORD 0 terminator]
+#   value     : [DWORD valueSize][DWORD pid][BYTE reserved][WORD vt][WORD pad]
+#               [DWORD charCount incl NUL][UTF-16LE string]
 $fmtid = [System.Guid]::Parse('9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3')
-$guidBytes = $fmtid.ToByteArray()
-$propertyId = [uint32]5
-$vt = [uint32]31
-
+$fmtidBytes = $fmtid.ToByteArray()
 $wideChars = [System.Text.Encoding]::Unicode.GetBytes($AppUserModelId + [char]0)
 $charCount = $wideChars.Length / 2
-$valueSize = 2 + $wideChars.Length
-$pad = (4 - ($valueSize % 4)) % 4
 
-$entry = [System.Collections.Generic.List[byte]]::new()
-$entry.AddRange([System.BitConverter]::GetBytes([uint32](20 + $valueSize + $pad)))  # entry cbSize
-$entry.AddRange([System.BitConverter]::GetBytes([uint32]1))                            # reserved
-$entry.AddRange([System.BitConverter]::GetBytes($propertyId))
-$entry.AddRange([System.BitConverter]::GetBytes($vt))
-$entry.AddRange([System.BitConverter]::GetBytes([uint32]20))                           # valueOffset
-$entry.AddRange([System.BitConverter]::GetBytes([uint16]$charCount))                   # wCount (incl NUL)
-$entry.AddRange($wideChars)
-$entry.AddRange((New-Object byte[] $pad))
+$val = [System.Collections.Generic.List[byte]]::new()
+$val.AddRange([System.BitConverter]::GetBytes([uint32](17 + $wideChars.Length)))  # valueSize incl. itself
+$val.AddRange([System.BitConverter]::GetBytes([uint32]5))                          # pid
+$val.Add([byte]0)                                                                  # reserved
+$val.AddRange([System.BitConverter]::GetBytes([uint16]0x001F))                      # vt = VT_LPWSTR
+$val.AddRange([System.BitConverter]::GetBytes([uint16]0))                           # padding
+$val.AddRange([System.BitConverter]::GetBytes([uint32]$charCount))                  # chars incl NUL
+$val.AddRange($wideChars)                                                           # UTF-16LE + NUL
 
-$header = [System.Collections.Generic.List[byte]]::new()
-$header.AddRange([System.BitConverter]::GetBytes([uint16]1))   # wVersion
-$header.AddRange([System.BitConverter]::GetBytes([uint16]1))   # wFormatID
-$header.AddRange($guidBytes)                                    # fmtid
-$headerSize = 24 + $entry.Count
-$header.AddRange([System.BitConverter]::GetBytes([uint32]$headerSize))  # cbSize (header + entries)
-$header.AddRange([System.BitConverter]::GetBytes([uint32]1))    # version
+$spsVersion = [byte[]](0x31, 0x53, 0x50, 0x53)                                      # "1SPS"
+$sheet = [System.Collections.Generic.List[byte]]::new()
+$sheet.AddRange([System.BitConverter]::GetBytes([uint32](4 + 4 + 16 + $val.Count + 4)))  # sheetSize incl. itself
+$sheet.AddRange($spsVersion)
+$sheet.AddRange($fmtidBytes)
+$sheet.AddRange($val)
+$sheet.AddRange([System.BitConverter]::GetBytes([uint32]0))                              # terminator
+
+$storage = [System.Collections.Generic.List[byte]]::new()
+$storage.AddRange([System.BitConverter]::GetBytes([uint32]$sheet.Count))
+$storage.AddRange($sheet)
 
 $block = [System.Collections.Generic.List[byte]]::new()
-$block.AddRange($header)
-$block.AddRange($entry)
+$block.AddRange([System.BitConverter]::GetBytes([uint32](8 + $storage.Count)))
+$block.AddRange([System.BitConverter]::GetBytes([Convert]::ToUInt32('A0000007', 16)))   # PropertyStoreDataBlock
+$block.AddRange($storage)
 
-$extra = [System.Collections.Generic.List[byte]]::new()
-$extra.AddRange([System.BitConverter]::GetBytes([uint32](8 + $block.Count)))  # blockSize
-$extra.AddRange([System.BitConverter]::GetBytes([Convert]::ToUInt32('A0000001', 16)))  # signature
-$extra.AddRange($block)
-
-# --- Append the block and the 0x00000000 terminator ---
-$output = New-Object byte[] ($pos + $extra.Count + 4)
+$output = New-Object byte[] ($pos + $block.Count + 4)
 [System.Array]::Copy($bytes, 0, $output, 0, $pos)
-$extraBytes = $extra.ToArray()
-[System.Array]::Copy($extraBytes, 0, $output, $pos, $extraBytes.Length)
-# terminator already zeroed
+$blockBytes = $block.ToArray()
+[System.Array]::Copy($blockBytes, 0, $output, $pos, $blockBytes.Length)
 
 [System.IO.File]::WriteAllBytes($ShortcutPath, $output)
-Write-Output "Wrote AppUserModelID block ($($extra.Count + 4) bytes) into: $ShortcutPath"
+Write-Output "Wrote AppUserModelID block ($($block.Count + 4) bytes) into: $ShortcutPath"

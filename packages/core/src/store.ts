@@ -10,6 +10,7 @@ import type {
 } from '@cron-code/contracts';
 import type { DataService, CommandSummary } from '@cron-code/data-service';
 import type { HostAdapter } from '@cron-code/host-adapter';
+import type { OpenCodeRunnerClient } from './opencode-client.js';
 
 export interface WorkspaceState {
   hostContext: HostContext;
@@ -56,6 +57,9 @@ export interface WorkspaceActions {
   clearCopyConfirm(): void;
   restartApp(): Promise<void>;
   restoreLastActiveProject(): Promise<void>;
+  trayShowTasks(): void;
+  trayPauseTask(): void;
+  trayStopTask(): Promise<void>;
 }
 
 export type WorkspaceStoreType = WorkspaceState & WorkspaceActions;
@@ -163,6 +167,8 @@ async function remapProjectReferences(
 export function createWorkspaceStore(deps: {
   dataService: DataService;
   hostAdapter: HostAdapter;
+  /** Optional runner bridge so tray Stop can cancel a pending OpenCode approval. */
+  openCodeRunner?: OpenCodeRunnerClient;
 }): WorkspaceStoreApi {
   const { dataService, hostAdapter } = deps;
 
@@ -671,6 +677,71 @@ export function createWorkspaceStore(deps: {
           error: err instanceof Error ? err.message : 'Failed to restart CRON',
         });
       }
+    },
+
+    trayShowTasks() {
+      const { tasks } = get();
+      const active =
+        tasks.find((task) => task.status === 'running') ??
+        tasks.find((task) => task.status === 'approval_required') ??
+        tasks.find((task) => task.status === 'queued') ??
+        tasks[tasks.length - 1] ??
+        null;
+      set({ selectedTaskId: active?.id ?? null });
+    },
+
+    trayPauseTask() {
+      // The task model has no pause state (TaskStatus has no 'paused'), so the
+      // tray Pause item surfaces the active task like "Show active tasks"
+      // instead of pretending to pause. It never cancels anything.
+      get().trayShowTasks();
+    },
+
+    async trayStopTask() {
+      const { tasks, approvals } = get();
+      const task =
+        tasks.find((candidate) => candidate.status === 'running') ??
+        tasks.find((candidate) => candidate.status === 'approval_required') ??
+        null;
+      if (!task) {
+        get().trayShowTasks();
+        return;
+      }
+      const pending = approvals.find(
+        (approval) => approval.taskId === task.id && approval.status === 'requested',
+      );
+      if (
+        pending?.openCodeSessionId &&
+        pending?.openCodePermissionId &&
+        deps.openCodeRunner
+      ) {
+        try {
+          await deps.openCodeRunner.replyToApproval({
+            taskId: task.id,
+            approvalId: pending.id,
+            decision: 'reject',
+            reason: 'Stopped from the system tray',
+          });
+          await get().refreshTasks();
+          await get().refreshApprovals();
+          await get().refreshExecutions();
+          return;
+        } catch (err) {
+          set({
+            selectedTaskId: task.id,
+            error: err instanceof Error ? err.message : 'CRON could not stop the task from the tray',
+          });
+          return;
+        }
+      }
+      // No interruptible execution handle exists for this task: catalogue
+      // executions and running OpenCode sessions expose no cancel id to the
+      // renderer, so a genuine stop needs a backend cancel path.
+      set({
+        selectedTaskId: task.id,
+        error:
+          'CRON could not stop the running task from the tray: it is not currently interruptible from the app.',
+      });
     },
   }));
 }

@@ -28,8 +28,16 @@ const projectRoot = path.resolve(__dirname, '..');
 
 const IS_DEV = process.env.CRON_DEV === '1' || process.argv.includes('--dev');
 
+// Taskbar grouping: Windows 11 groups a pinned taskbar button with the running
+// window ONLY when both share one identity. This OS writes no AppUserModelID
+// property store into classic-exe shortcuts (verified: every pinned/installer
+// shortcut carries an icon-path blob instead, and IPropertyStore refuses
+// SetValue), so explicit setAppUserModelId() calls would make the window a
+// stranger to its pinned icon (double icon). Leaving the AUMID implicit makes
+// the window identity equal the electron.exe path — which is exactly what the
+// pinned shortcut resolves to when it targets electron.exe directly.
+
 if (IS_DEV) {
-  app.setAppUserModelId('com.cron.code.dev');
   app.setPath('userData', path.join(app.getPath('appData'), 'CRON for Code Dev'));
 }
 

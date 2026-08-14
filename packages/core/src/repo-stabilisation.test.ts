@@ -460,10 +460,11 @@ describe('dev launcher', () => {
     expect(ps1).toContain('code-dev-electron.log');
   });
 
-  it('shortcut creator targets the silent launcher', () => {
+  it('shortcut creator targets electron.exe directly (single taskbar identity)', () => {
     const ps1 = readRepoFile('scripts/create-code-dev-shortcut.ps1');
-    expect(ps1).toContain('launch-cron-for-code-dev.vbs');
+    expect(ps1).toContain('electron.exe');
     expect(ps1).toContain('.TargetPath');
+    expect(ps1).not.toContain('launch-cron-for-code-dev.vbs');
   });
 
   it('shortcut uses the CRON for Code icon', () => {

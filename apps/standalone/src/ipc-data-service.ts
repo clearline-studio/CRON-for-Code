@@ -69,6 +69,12 @@ interface CronHostApp {
   restart(): Promise<void>;
 }
 
+interface CronHostTray {
+  onShowTasks(callback: () => void): () => void;
+  onPauseTask(callback: () => void): () => void;
+  onStopTask(callback: () => void): () => void;
+}
+
 interface CronHostDiag {
   marker(): Promise<{
     appVersion: string;
@@ -107,6 +113,7 @@ declare global {
       };
       project: CronHostProject;
       app: CronHostApp;
+      tray: CronHostTray;
       diag: CronHostDiag;
       lmStudio: {
         getConfig(): Promise<{ baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string }>;
@@ -143,6 +150,14 @@ export function createIpcOpenCodeRunnerClient() {
     runTask: (input: OpenCodeRunInput) => window.cronHost.opencode.runTask(input),
     replyToApproval: (input: OpenCodeApprovalReplyInput) => window.cronHost.opencode.replyToApproval(input),
     onEvent: (callback: (event: OpenCodeRunEvent) => void) => window.cronHost.opencode.onEvent(callback),
+  };
+}
+
+export function createIpcTrayClient() {
+  return {
+    onShowTasks: (callback: () => void) => window.cronHost.tray.onShowTasks(callback),
+    onPauseTask: (callback: () => void) => window.cronHost.tray.onPauseTask(callback),
+    onStopTask: (callback: () => void) => window.cronHost.tray.onStopTask(callback),
   };
 }
 

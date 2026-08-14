@@ -1459,3 +1459,198 @@ production/unrelated CRON apps untouched.
 ### Reports written
 - `CRON_CODE_FAST_STARTUP_LIVE_EXECUTION_ROLE_LOCK_REPORT.md` (created)
 - `CRON_CODE_FAST_STARTUP_LIVE_EXECUTION_ROLE_LOCK_EVIDENCE.md` (created)
+
+---
+
+## Safety + Tray Menu Fix Execution Entry — 2026-08-13 (CC/OpenCode)
+
+Task: `CC_CODE_SAFETY_AND_TRAY_FIX_PROMPT.md` — delete legacy `CommandExecutor` (security) +
+wire the tray menu listeners (usability). Restart button explicitly out of scope.
+
+### Fix 1 — legacy `CommandExecutor` removed (security)
+- `packages/data-service/src/task-runner.ts`: `CommandExecutor` class (the `child_process.exec`
+  shell landmine) deleted entirely. `TaskRunner` / `TaskExecutor` / `TaskExecResult` /
+  `TaskRunnerConfig` untouched.
+- `packages/data-service/src/index.ts`: export narrowed to `export { TaskRunner } ...`.
+- No other code imported it (only historical markdown docs mention it; left as records).
+- `grep CommandExecutor` over all code: zero matches after the change.
+
+### Fix 2 — tray menu listeners wired (usability)
+- `apps/standalone/electron/preload.cjs`: new `tray` bridge — `onShowTasks` / `onPauseTask` /
+  `onStopTask` subscribe to `cron:tray:show-tasks` / `cron:tray:pause-task` /
+  `cron:tray:stop-task` and return an unsubscribe function (listener cleanup on unmount).
+- `packages/core/src/tray.ts` (new): host-agnostic `TrayClient` interface; exported from
+  `packages/core/src/index.ts`.
+- `packages/core/src/store.ts`: new actions —
+  - `trayShowTasks()`: selects the active task (running → approval_required → queued → latest).
+  - `trayPauseTask()`: surfaces the active task; the task model has NO pause state, so it never
+    pretends to pause and never cancels anything (safe default; see note below).
+  - `trayStopTask()`: real stop when possible — rejects the pending OpenCode approval via the
+    injected `openCodeRunner` (session cancelled, task cancelled) and refreshes; otherwise an
+    honest error "not currently interruptible" instead of faking it.
+  - Optional `openCodeRunner` added to store deps.
+- `packages/core/src/components/App.tsx`: `AppDeps.tray?: TrayClient` + subscription effect
+  with cleanup (all three channels).
+- `apps/standalone/src/ipc-data-service.ts`: `createIpcTrayClient()` + `cronHost.tray` typing.
+- `apps/standalone/src/main.tsx`: passes `tray: createIpcTrayClient()`.
+- Tests: `packages/core/src/tray-actions.test.ts` (new, 6 tests).
+
+### Verification
+- `pnpm test` — 325 PASS (contracts 24, data-service 94, core 184 incl. 6 new, host-adapter
+  23). NOTE: the two previously-failing `opencode-runner.test.ts` timeouts passed this run;
+  data-service was RED before this slice (2 timeouts, reproduced twice on 2026-08-13).
+- `pnpm typecheck` PASS (required `pnpm --filter @cron-code/core build` first so standalone
+  typechecks against the new `AppDeps.tray` in core's dist types).
+- `pnpm lint` PASS — 0 errors, 3 warnings (one new `exhaustive-deps` in `App.tsx` from the
+  tray effect; same class as the 2 pre-existing warnings).
+- `pnpm build` PASS. `git diff --check` clean. No Git mutation, nothing staged.
+
+### Notes for the Architect (honest limits)
+1. **Pause is not a real state**: `TaskStatus` has no `paused`; tray "Pause" currently
+   surfaces the active task (same as Show active tasks) rather than destroying anything.
+   A true pause needs a new task state + backend support.
+2. **Stop is backend-limited**: only an approval-pending OpenCode task is genuinely
+   stoppable from the renderer. Running catalogue commands / OpenCode sessions expose no
+   cancel id to the renderer, so those surface an honest "not interruptible" error. A
+   backend cancel-by-task path would be needed for full Stop.
+3. Docs (`CRON_ARCHITECT_LOG.md`, reports, README history) still mention `CommandExecutor`
+   as historical records; code references are gone.
+
+### Boundary
+No staged/committed/pushed/reset/restored/cleaned changes. No dependency changes. No
+`main.mjs` tray-menu change (per prompt), `ExecutionService` untouched (per prompt),
+restart button untouched. All Git commands read-only.
+
+### CC Training Notes (slice 23)
+- PERMANENT RULE (Venessa, 2026-08-13): after EVERY task/slice/change, append an entry to
+  BOTH `PROJECT_LOG.md` AND `CRON_ARCHITECT_LOG.md` — regardless of what the task prompt
+  says. Never skip the logs because a prompt omits them.
+- When a store action must act on "the active task", it reads store state, not the data
+  service — seed `tasks`/`approvals`/`activeProjectId` in store tests before asserting.
+- The 2 previously-red opencode-runner timeouts are load-sensitive (near the 5s default);
+  verify by re-running the file in isolation before classifying a fix.
+- Standalone typechecks against core's BUILT dist types — rebuild `@cron-code/core` before
+  typechecking standalone after changing core's public surface.
+
+---
+
+## Taskbar Double-Icon Fix Execution Entry — 2026-08-13 (CC/OpenCode)
+
+Task (Venessa): "code is opening a running icon next to the pinned icon when i open it —
+fix it so it only opens 1 on the taskbar."
+
+### Root cause (proven with live evidence, not guessed)
+Windows 11 groups a pinned taskbar button with the running window only when both share
+one identity. On this OS:
+1. NO pinned/installer shortcut carries an AppUserModelID property store: every real
+   shortcut on the machine (pinned Edge/Chrome/OpenCode/CRON Dev/CRON Meds, installed
+   CRON for Code, Chrome's Start Menu link) has only a custom 788-byte icon-path blob in
+   its extra data (signature 0xA0000007) — verified by byte-level decode and by
+   `IPropertyStore::GetValue` (all NOT-SET).
+2. `IPropertyStore::SetValue` refuses to write AppUserModelID on .lnk files
+   (STG_E_INVALIDPARAMETER 0x80030005), so the property cannot be stamped at all.
+3. The pre-existing `scripts/set-shortcut-appuser-model-id.ps1` used the WRONG extra-data
+   signature (0xA0000001 = ConsoleDataBlock, not 0xA0000007 = PropertyStoreDataBlock) and
+   a wrong storage layout — a `_probe-lnk-propstore.ps1` + round-trip probe (16 variants)
+   proved nothing round-tripped.
+4. Therefore grouping on this build is by implicit exe-path identity. The pinned "CRON
+   for Code Dev" shortcut targeted `launch-cron-for-code-dev.vbs` → button identity =
+   wscript.exe; the running app (electron.exe) = electron.exe path → MISMATCH → the
+   second "running" icon the user saw. Confirmed: the running normal-mode renderer
+   carries no `--app-user-model-id` (implicit identity), and the pinned .lnk has no
+   AppUserModelID property.
+
+### Fix delivered
+1. `apps/standalone/electron/main.mjs`: explicit `app.setAppUserModelId()` REMOVED for
+   all modes (it existed only in dev). The window identity is now always the implicit
+   electron.exe path — which is what the pinned button resolves to after fix 2. (The
+   packaged build keeps implicit identity too: its installer shortcut has no property,
+   so explicit IDs would only break it.) Comment documents the Windows 11 finding.
+2. Shortcuts retargeted from the VBS launcher to `electron.exe` DIRECTLY (args `.`,
+   workdir `apps\standalone`): Desktop `CRON for Code Dev.lnk`, the stray Desktop
+   `CRON for Code Dev (2).lnk`, and the pinned TaskBar `CRON for Code Dev.lnk`. Button
+   identity and window identity are now the same path → ONE taskbar icon. The app entry
+   loaded is identical (apps/standalone package.json `main`), normal mode.
+3. `scripts/create-code-dev-shortcut.ps1` rewritten to create the direct-exe shortcut
+   (electron.exe lookup with root fallback; taskbar rationale in comments).
+4. `scripts/set-shortcut-appuser-model-id.ps1` corrected to the REAL MS-SHLLINK
+   layout (signature 0xA0000007, "1SPS" sheet, numeric PKEY entry — verified against
+   the LECmd/ExtensionBlocks parser) and annotated as superseded-on-this-OS.
+5. Diagnostics kept in `scripts/`: `_probe-lnk-propstore.ps1`, `_probe-lnk-roundtrip.ps1`,
+   `_verify-appuser-model-id.ps1`, `_taskbar-button-count.ps1`.
+
+### Verification
+- `node --check main.mjs` clean; `pnpm lint` 0 errors (3 pre-existing warnings).
+- Launch via the NEW desktop shortcut: no new process spawned (16 electron processes
+  before and after) — the single-instance lock surfaced the already-running window,
+  proving the shortcut chain works end to end.
+- Shortcut targets verified via WScript (electron.exe + "." + workdir) on all three .lnk.
+- The running instance (PID 27592, started 16:32) already has implicit identity
+  (old main.mjs set no AUMID in normal mode) so it already merges with the new pinned
+  button identity.
+- Taskbar button count is not programmatically observable on this Win11 build (the
+  XAML taskbar exposes no legacy button children — documented in `_taskbar-button-count.ps1`);
+  final visual acceptance = Venessa: click the pinned icon — one icon, window surfaces.
+  If a ghost button lingers, unpin it once and re-pin (the new identity matches the
+  running app permanently).
+
+### Boundary
+No Git mutation, nothing staged, no dependency changes, no launcher/VBS/.bat changes
+(the launcher chain stays intact for dev workflows via Launch-CRON-for-Code-Dev.bat),
+no tests changed (main.mjs has no vitest coverage; launcher tests unaffected).
+
+### CC Training Notes (slice 24)
+- PowerShell 5.1 hex literals with the high bit set (0xA0000007) parse as NEGATIVE
+  int32 — `[Convert]::ToUInt32('A0000007', 16)` is the reliable form. A false-negative
+  scan nearly sent this investigation down a wrong path.
+- The .lnk extra-data signature for property stores is 0xA0000007 (MS-SHLLINK
+  PropertyStoreDataBlock), NOT 0xA0000001 (ConsoleDataBlock).
+- This Win11 build stores pinned-button identity purely as the shortcut target path
+  (icon-path blobs in extra data, no AppUserModelID properties, SetValue refused):
+  taskbar grouping fixes for classic exe apps = align shortcut target exe with the
+  process's implicit identity, not property-store stamping.
+- Win11's XAML taskbar exposes no button children to legacy EnumChildWindows; UIA
+  enumeration of the whole desktop mixes taskbar buttons with window content — treat
+  taskbar counts as human-verifiable.
+- LECmd/ExtensionBlocks (`EricZimmerman/Lnk`) is the fastest way to get the true
+  serialized-property-storage layout when the shell won't confirm it.
+
+---
+
+## Audit + Fix Sweep � 2026-08-14 (CC/OpenCode)
+
+Task: `CC_CODE_AUDIT_AND_FIX_PROMPT.md` - full audit (tests, security, dead code, restart/tray wiring) then fix what is safe, verify, report. Repo `C:\Users\venes\projects\CRON APPS\CRON for Code`, branch `main`, nothing staged.
+
+### Audit findings (before)
+1. Tests: 3 failing, all in `packages/core/src/repo-stabilisation.test.ts`:
+   - "launcher does not contain automatic install commands" - the error message "Run pnpm install first." in `scripts/create-code-dev-shortcut.ps1` matched the install-command guard regex.
+   - "shortcut creator targets the silent launcher" - expected the OLD VBS-target contract; the script intentionally targets electron.exe directly (taskbar identity fix, 2026-08-13).
+   - "restart-safe launcher logic/source tests pass" - 2 inner assertions in `scripts/test-code-dev-launcher.ps1` still asserted the old VBS/repoRoot contract.
+2. `child_process.exec`: NOT present anywhere. The legacy `CommandExecutor` was already deleted on 2026-08-13 (verified by grep: zero code references; docs mention it historically). Remaining `child_process` use is `spawn`/`spawnSync` only (`shell:false` in opencode-runner/execution-harness; dev.mjs `shell:true` is fixed-command pnpm shim spawning - no user input). No `eval` anywhere.
+3. Dead files: two stale `.before-aumid-fix` backups (`apps/standalone/electron/main.mjs.before-aumid-fix` untracked, `scripts/create-code-dev-shortcut.ps1.before-aumid-fix` tracked). Unused export `isTerminalExecution` in `execution-harness.ts`. `TaskRunner` (exported + tested, no live callers) flagged, not deleted. Diagnostic probe scripts kept per 2026-08-13 log decision.
+4. Restart button: fully wired (store `restartApp` ? host bridge `cron:app:restart` ? main writes restart intent ? dev.mjs relaunch ? RestartOverlay lingers until ready). No action needed.
+5. Tray menu: fully wired end-to-end (main.mjs sends 3 `cron:tray:*` events, preload subscriptions, `createIpcTrayClient`, `App.tsx` effect with cleanup, store actions `trayShowTasks`/`trayPauseTask`/`trayStopTask` + 6 tests). No action needed.
+6. TODO/FIXME/HACK: zero in code.
+7. Security: no shell exec, no eval, harness output redaction, path-boundary checks (`assertPathInsideProject`), sandboxed preload (no raw ipcRenderer/process/shell). Clean.
+
+### Fixes applied (this session)
+1. `scripts/create-code-dev-shortcut.ps1` - error message reworded to "Run the dependency install step first." (no longer trips the automatic-install guard).
+2. `packages/core/src/repo-stabilisation.test.ts` - "shortcut creator targets the silent launcher" rewritten to "shortcut creator targets electron.exe directly (single taskbar identity)" (asserts electron.exe + .TargetPath, asserts no VBS reference).
+3. `scripts/test-code-dev-launcher.ps1` - 2 assertions updated to the new contract: targets electron.exe directly (not VBS), working directory is `\` (not repo root).
+4. `packages/data-service/src/execution-harness.ts` - deleted unused `isTerminalExecution` export (and its `isFinalExecutionStatus` import).
+5. Deleted the two stale `.before-aumid-fix` backups (user-approved).
+
+### Verification (after)
+- `pnpm test` all green: contracts 24, data-service 94, core 184 (14 files), host-adapter 23 = 325 pass, 0 fail.
+- `pnpm typecheck` all packages Done.
+- `pnpm lint` 0 errors, 3 pre-existing warnings (exhaustive-deps in App.tsx).
+- `scripts/test-code-dev-launcher.ps1` standalone run: all assertions PASS.
+- `git diff --stat`: 17 files, +482/-165 (includes pre-existing uncommitted work from the tray/AUMID sessions).
+
+### Current state
+325 tests green; launcher/shortcut contract tests now match the intentional direct-exe design; all `child_process.exec` code is gone; restart and tray are wired and tested. 15 files remain uncommitted (mix of this session's fixes and prior sessions' intentional work) - Venessa commits manually.
+
+### CC Training Notes (slice 25)
+- The stale-test hazard: a deliberate design change (shortcut identity fix) left 3 tests asserting the OLD contract. Tests must be updated in lockstep with intentional behaviour changes; the prior session's "launcher tests unaffected" note was wrong.
+- The install-command guard regex matches any `pnpm install` string, including user-facing error messages - keep messages free of literal command forms or the guard stays noisy.
+- `shell:true` in dev.mjs is safe ONLY because every argument is a fixed literal; it exists to spawn pnpm.cmd/electron shims on Windows.

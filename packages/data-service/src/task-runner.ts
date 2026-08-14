@@ -127,35 +127,3 @@ export class TaskRunner {
     }
   }
 }
-
-export class CommandExecutor implements TaskExecutor {
-  private readonly _command: string;
-
-  constructor(command: string) {
-    this._command = command;
-  }
-
-  async execute(task: Task, timeoutMs: number): Promise<TaskExecResult> {
-    const { exec } = await import('node:child_process');
-
-    return new Promise((resolve) => {
-      const child = exec(
-        this._command,
-        { timeout: timeoutMs, windowsHide: true },
-        (error, stdout, stderr) => {
-          resolve({
-            exitCode: error?.code ?? 0,
-            stdout: stdout.trim(),
-            stderr: stderr.trim(),
-          });
-        },
-      );
-
-      const prompt = task.prompt;
-      if (prompt && child.stdin) {
-        child.stdin.write(prompt);
-        child.stdin.end();
-      }
-    });
-  }
-}

@@ -6,6 +6,7 @@ import { WorkspaceProvider, useWorkspaceStoreRaw } from '../context.js';
 import { Layout } from './Layout.js';
 import type { LlmClient } from '../llm.js';
 import type { OpenCodeRunnerClient } from '../opencode-client.js';
+import type { TrayClient } from '../tray.js';
 
 // The post-restart Restarting overlay must be perceivable: even when init is
 // fast, it stays up for at least this long so the transition never reads as a
@@ -17,6 +18,8 @@ export interface AppDeps {
   hostAdapter: HostAdapter;
   llm?: LlmClient;
   openCodeRunner?: OpenCodeRunnerClient;
+  /** Tray menu events from the host (window focus is handled host-side). */
+  tray?: TrayClient;
   /** True when this instance was relaunched by dev.mjs after an in-app restart.
    *  Keeps the Restarting overlay visible from first paint until the app is ready. */
   startupRestartHandoff?: boolean;
@@ -106,6 +109,19 @@ function AppInner({ deps }: { deps: AppDeps }) {
     });
     return unsub;
   }, [hostAdapter]);
+
+  useEffect(() => {
+    const tray = deps.tray;
+    if (!tray) return;
+    const unsubscribers = [
+      tray.onShowTasks(() => raw.getState().trayShowTasks()),
+      tray.onPauseTask(() => raw.getState().trayPauseTask()),
+      tray.onStopTask(() => void raw.getState().trayStopTask()),
+    ];
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+    };
+  }, [deps.tray]);
 
   return (
     <Layout

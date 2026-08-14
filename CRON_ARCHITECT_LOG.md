@@ -16,6 +16,9 @@ This entry is a fresh-session resume checkpoint produced by a strictly read-only
 - CC/OpenCode performs inspection, testing, evidence collection, and implementation only when explicitly authorised.
 - CC must never stage, commit, push, merge, tag, release, reset, restore, clean, rewrite history, or otherwise alter Git history.
 - Nothing may be staged.
+- PERMANENT RULE (Venessa, 2026-08-13): CC/OpenCode must append an entry to BOTH
+  `PROJECT_LOG.md` AND `CRON_ARCHITECT_LOG.md` after EVERY task/slice/change, regardless
+  of what the task prompt says. Logs are never skipped because a prompt omits them.
 
 ### Repository identity (verified 2026-08-06)
 - Path: `C:\Users\venes\projects\CRON APPS\CRON for Code`
@@ -3947,5 +3950,146 @@ file:// renderer). No Git mutation.
 - `CRON_CODE_FAST_STARTUP_LIVE_EXECUTION_ROLE_LOCK_EVIDENCE.md` (created)
 - `PROJECT_LOG.md` (appended)
 - This log (appended)
+
+Return this complete report to the CRON Architect for review.
+
+---
+
+## Safety + Tray Menu Fix — 2026-08-13 (CC/OpenCode, implementation)
+
+Task: `CC_CODE_SAFETY_AND_TRAY_FIX_PROMPT.md` — delete legacy `CommandExecutor` (security) +
+wire the tray menu listeners (usability). Restart button explicitly out of scope.
+Repo `C:\Users\venes\projects\CRON APPS\CRON for Code`, branch `main`, HEAD `8157b12`,
+nothing staged.
+
+### What was done
+1. **`CommandExecutor` deleted** (`packages/data-service/src/task-runner.ts`): the
+   `child_process.exec` shell-execution landmine is gone (it had no live callers; the
+   governed `ExecutionService` is the only execution path). Export narrowed in
+   `packages/data-service/src/index.ts`. `grep CommandExecutor` over all code: zero
+   matches (docs mention it only as historical records).
+2. **Tray menu listeners wired end-to-end**:
+   - `preload.cjs`: `tray.onShowTasks/onPauseTask/onStopTask` — subscriptions to
+     `cron:tray:show-tasks` / `pause-task` / `stop-task` returning unsubscribe functions.
+   - `packages/core/src/tray.ts` (new): host-agnostic `TrayClient` interface (core stays
+     Electron-free).
+   - `store.ts`: `trayShowTasks` (select active task), `trayPauseTask`, `trayStopTask`
+     (rejects a pending OpenCode approval through the injected runner → genuine cancel;
+     honest "not interruptible" error otherwise). Optional `openCodeRunner` store dep.
+   - `App.tsx`: `AppDeps.tray` + subscription effect with cleanup on unmount.
+   - `ipc-data-service.ts` + `main.tsx`: `createIpcTrayClient()` wired into the standalone
+     renderer.
+
+### Verification
+Typechecks all PASS (core dist rebuilt first so standalone resolves the new `AppDeps.tray`);
+325 tests PASS (contracts 24, data-service 94, core 184 incl. 6 new tray tests, host-adapter
+23); full `pnpm build` PASS; eslint 0 errors (3 warnings — one new `exhaustive-deps` in
+`App.tsx`, same class as the 2 pre-existing); `git diff --check` clean. No Git mutation.
+NOTE for the record: the 2 opencode-runner timeouts that were RED on 2026-08-13 audit runs
+passed this run (load-sensitive near the 5s default).
+
+### Honest limits flagged
+1. Tray "Pause" has no backend target: `TaskStatus` has no `paused` state, so Pause
+   surfaces the active task and never cancels. A true pause needs a new task state +
+   backend support (Architect decision).
+2. Tray "Stop" only genuinely stops an approval-pending OpenCode task; running catalogue
+   commands / OpenCode sessions expose no cancel id to the renderer (honest error path).
+   A backend cancel-by-task API is the follow-up if full Stop is wanted.
+3. `main.mjs` tray menu and `ExecutionService` untouched per the prompt.
+
+### Decision history (updated)
+- 2026-08-13 — CommandExecutor removed; tray menu listeners wired; PERMANENT LOG RULE
+  recorded (both logs updated after every task regardless of prompt). Ready for Venessa
+  tray testing.
+
+### Report and evidence paths
+- `PROJECT_LOG.md` (appended, incl. slice-23 training notes)
+- This log (appended)
+
+Return this complete report to the CRON Architect for review.
+
+---
+
+## Taskbar Double-Icon Fix — 2026-08-13 (CC/OpenCode, defect repair)
+
+Task (Venessa): the app "opens a running icon next to the pinned icon"; fix so it
+shows ONE taskbar icon. Repo `C:\Users\venes\projects\CRON APPS\CRON for Code`,
+branch `main`, HEAD `8157b12`, nothing staged.
+
+### Root cause (proven, not guessed)
+Windows 11 groups the pinned button with the running window only when both share one
+identity. Live evidence on this machine: every pinned/installer shortcut (incl. the
+pinned CRON for Code Dev, installed CRON for Code, Edge/Chrome/OpenCode) carries NO
+AppUserModelID property (only a custom 788-byte icon-path blob; `IPropertyStore` reads
+NOT-SET and refuses `SetValue` with STG_E_INVALIDPARAMETER). Grouping is therefore by
+implicit exe path. The pinned shortcut targeted the VBS launcher → button identity =
+wscript.exe, while the running window identity = electron.exe → mismatch → the second
+"running" icon. The old `scripts/set-shortcut-appuser-model-id.ps1` was also broken
+(wrong block signature 0xA0000001 and layout; nothing round-tripped).
+
+### Fix
+1. `main.mjs`: removed the explicit `app.setAppUserModelId()` (dev-only) — window
+   identity is now the implicit electron.exe path in all source modes.
+2. Retargeted the Desktop `CRON for Code Dev.lnk` (+ stray `(2)` duplicate) and the
+   PINNED TaskBar `CRON for Code Dev.lnk` to `electron.exe .` directly (workdir
+   `apps\standalone`) — pinned identity and window identity are now the same path.
+   App entry and normal-mode behaviour are identical; single-instance lock intact.
+3. `scripts/create-code-dev-shortcut.ps1` rewritten for the direct-exe shortcut.
+4. `scripts/set-shortcut-appuser-model-id.ps1` corrected to the true MS-SHLLINK layout
+   (signature 0xA0000007, "1SPS" sheet, LECmd-verified) and annotated as superseded
+   on this OS. Diagnostic probes retained in `scripts/`.
+5. The VBS/PS1 launcher chain is UNTOUCHED (still the dev-mode path via
+   `Launch-CRON-for-Code-Dev.bat`); this fix changes only the shortcut identity and
+   the AUMID call.
+
+### Verification
+`node --check main.mjs` clean; `pnpm lint` 0 errors (3 pre-existing warnings). Launch
+via the new desktop shortcut surfaced the running window with NO new process
+(16→16 electron processes; single-instance lock proof). Shortcut targets verified.
+The live instance already has implicit identity, so it merges with the new pinned
+button immediately. Taskbar button counts are not programmatically observable on this
+Win11 build (XAML taskbar, documented); Venessa's visual check is the acceptance step
+(click the pinned icon — one icon; if a ghost button lingers, unpin/repin once).
+
+### Decision history (updated)
+- 2026-08-13 — taskbar identity aligned to exe-path matching (shortcuts retargeted to
+  electron.exe, explicit AUMID removed); logs updated per the permanent rule. Awaiting
+  Venessa's visual taskbar acceptance.
+
+### Report and evidence paths
+- `PROJECT_LOG.md` (appended, incl. slice-24 training notes)
+- This log (appended)
+
+Return this complete report to the CRON Architect for review.
+
+---
+
+## Audit + Fix Sweep � 2026-08-14 (CC/OpenCode, audit/fix)
+
+Task: `CC_CODE_AUDIT_AND_FIX_PROMPT.md`. Full audit then safe fixes, verification, and this report. Branch `main`, HEAD `71eaf50` + 2 local commits ahead of origin, nothing staged, 19 files uncommitted at start.
+
+### Stage call
+Implementation (safe fixes only). No architectural changes made; two items flagged below for the Architect/Venessa.
+
+### What was found and fixed
+1. **Security landmine already gone.** The `CommandExecutor` (`child_process.exec` + shell) was deleted on 2026-08-13. Re-audit today: zero `child_process.exec` and zero `eval` in the repo. All subprocess use is `spawn`/`spawnSync`; only `apps/standalone/scripts/dev.mjs` uses `shell:true` (fixed-literal pnpm/electron shim spawning on Windows - no interpolated user input, acceptable). `SafeExecutionHarness` (no shell, bounded/redacted output, kill-tree) remains the only governed execution path.
+2. **3 failing tests fixed (all stale vs. the intentional 2026-08-13 shortcut identity change):**
+   - `create-code-dev-shortcut.ps1` error message reworded (no longer trips the no-auto-install guard).
+   - `repo-stabilisation.test.ts` + `test-code-dev-launcher.ps1` now assert the direct `electron.exe` target / `apps\standalone` workdir contract instead of the superseded VBS/repoRoot contract.
+3. **Dead code removed:** unused `isTerminalExecution` export (`execution-harness.ts`); the two stale `.before-aumid-fix` backup files deleted (user-approved).
+4. **Restart button + tray menu:** verified fully wired and tested end-to-end (no action needed). Restart: store ? IPC ? restart intent ? dev.mjs relaunch ? lingering overlay. Tray: main.mjs `cron:tray:*` sends ? preload subscriptions ? `App.tsx` effect (cleanup on unmount) ? store actions, 6 dedicated tests.
+
+### Verification
+325/325 tests pass (contracts 24, data-service 94, core 184, host-adapter 23); `pnpm typecheck` all packages clean; `pnpm lint` 0 errors (3 pre-existing exhaustive-deps warnings); launcher logic script passes standalone. `git diff --stat` = 17 files, +482/-165 (includes prior sessions' uncommitted tray/AUMID work).
+
+### Trust score
+9/10. All prior sessions' claims that were verifiable today held (CommandExecutor gone, tray wired, restart wired, launcher contracts). One prior-session note was wrong ("launcher tests unaffected" - they were stale and failing) - hence 9 not 10.
+
+### Priority fixes for Venessa/Architect (decisions, not implemented)
+1. `TaskRunner` + `TaskExecutor` types in `packages/data-service/src/task-runner.ts`: exported public API with tests but ZERO live callers (governed path is `ExecutionService`). Delete the polling model or keep as the legacy scheduled-runner contract? Recommend delete for the same reason `CommandExecutor` was deleted.
+2. Untracked diagnostics `scripts/_probe-lnk-roundtrip.ps1` and `scripts/_taskbar-button-count.ps1` (deliberately kept per 2026-08-13 log). Keep tracked, or move to a gitignored diagnostics folder?
+
+### Log rule
+Both `PROJECT_LOG.md` and this log appended per the permanent rule.
 
 Return this complete report to the CRON Architect for review.

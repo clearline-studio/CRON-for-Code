@@ -22,6 +22,7 @@ export type {
   OpenCodeRunResult,
   OpenCodeRunStatus,
 } from './opencode-client.js';
+export type { TrayClient } from './tray.js';
 export {
   DEFAULT_LLM_CONFIG,
   buildOpenCodeHandoffPrompt,

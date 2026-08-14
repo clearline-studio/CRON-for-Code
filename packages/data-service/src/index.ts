@@ -4,7 +4,7 @@ export { logger } from './logger.js';
 export { ProjectManagementService } from './project-management.js';
 export type { ProjectManagementConflict, ProjectManagementOutcome } from './project-management.js';
 export { normalizeProjectPath } from './path-normalize.js';
-export { TaskRunner, CommandExecutor } from './task-runner.js';
+export { TaskRunner } from './task-runner.js';
 export type { TaskExecutor, TaskExecResult, TaskRunnerConfig } from './task-runner.js';
 export { SafeExecutionHarness } from './execution-harness.js';
 export type { ExecutionInput, SpawnHandle, SpawnFn, HarnessOptions } from './execution-harness.js';

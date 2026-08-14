@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { CronCodeApp } from '@cron-code/core';
 import { createStandaloneHostAdapter } from '@cron-code/host-adapter';
 import type { HostProjectAction, HostProjectActionResult } from '@cron-code/host-adapter';
-import { createIpcDataService, createIpcLlmClient, createIpcOpenCodeRunnerClient } from './ipc-data-service.js';
+import { createIpcDataService, createIpcLlmClient, createIpcOpenCodeRunnerClient, createIpcTrayClient } from './ipc-data-service.js';
 import '@cron-code/design-tokens';
 
 import shellBgUrl from '../branding/assets/cron_shell_background.png';
@@ -74,6 +74,7 @@ async function bootstrap() {
           hostAdapter,
           llm: createIpcLlmClient(),
           openCodeRunner: createIpcOpenCodeRunnerClient(),
+          tray: createIpcTrayClient(),
           startupRestartHandoff,
           onUsable: () => {
             void window.cronHost.diag.usable().catch(() => undefined);

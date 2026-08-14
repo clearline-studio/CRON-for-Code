@@ -3,7 +3,6 @@ import {
   createExecutionRecord,
   createExecutionOutput,
   createExecutionError,
-  isFinalExecutionStatus,
 } from '@cron-code/contracts';
 import type {
   ExecutionRecord,
@@ -346,8 +345,4 @@ export class SafeExecutionHarness {
       });
     });
   }
-}
-
-export function isTerminalExecution(record: ExecutionRecord): boolean {
-  return isFinalExecutionStatus(record.status);
 }

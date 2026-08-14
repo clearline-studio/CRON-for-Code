@@ -1,5 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Tray menu events flow main -> renderer. Each subscription returns an
+// unsubscribe function so the renderer can clean up on unmount.
+function subscribeToTrayEvent(channel, callback) {
+  const listener = (_event, payload) => callback(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
 contextBridge.exposeInMainWorld('cronHost', {
   selectFolder: () => ipcRenderer.invoke('cron:select-folder'),
 
@@ -53,6 +61,12 @@ contextBridge.exposeInMainWorld('cronHost', {
 
   app: {
     restart: () => ipcRenderer.invoke('cron:app:restart'),
+  },
+
+  tray: {
+    onShowTasks: (callback) => subscribeToTrayEvent('cron:tray:show-tasks', callback),
+    onPauseTask: (callback) => subscribeToTrayEvent('cron:tray:pause-task', callback),
+    onStopTask: (callback) => subscribeToTrayEvent('cron:tray:stop-task', callback),
   },
 
   diag: {
