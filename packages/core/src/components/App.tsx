@@ -7,11 +7,13 @@ import { Layout } from './Layout.js';
 import type { LlmClient } from '../llm.js';
 import type { OpenCodeRunnerClient } from '../opencode-client.js';
 import type { TrayClient } from '../tray.js';
+import type { FolderPickerBridge } from '../folder-picker.js';
 
 // The post-restart Restarting overlay must be perceivable: even when init is
 // fast, it stays up for at least this long so the transition never reads as a
-// flash. Conservative floor; the overlay only clears once the app is ALSO ready.
-const RESTART_LINGER_MIN_MS = 2000;
+// flash. Conservative ~3s floor (design polish); the overlay only clears once
+// the app is ALSO ready.
+const RESTART_LINGER_MIN_MS = 3000;
 
 export interface AppDeps {
   dataService: DataService;
@@ -20,6 +22,9 @@ export interface AppDeps {
   openCodeRunner?: OpenCodeRunnerClient;
   /** Tray menu events from the host (window focus is handled host-side). */
   tray?: TrayClient;
+  /** CRON-styled folder browser bridge. When omitted the modal falls back to a
+   *  host-unavailable notice instead of opening a raw OS dialog. */
+  folderPicker?: FolderPickerBridge;
   /** True when this instance was relaunched by dev.mjs after an in-app restart.
    *  Keeps the Restarting overlay visible from first paint until the app is ready. */
   startupRestartHandoff?: boolean;
@@ -128,15 +133,15 @@ function AppInner({ deps }: { deps: AppDeps }) {
       dataService={deps.dataService}
       llm={deps.llm}
       openCodeRunner={deps.openCodeRunner}
+      folderPicker={deps.folderPicker}
       preparing={restartHandoff}
       onSelectProject={() => {
         void (async () => {
           try {
-            // CRON-styled picker flow: the modal shows briefly BEFORE the native
-            // OS dialog opens (and stays while the selection is added), so the
-            // user is never dropped into raw Windows without app context.
+            // CRON-styled picker flow: the dark-navy folder browser modal opens
+            // immediately and stays open while `selectProject()` awaits the
+            // user's choice, so the user is never dropped into raw Windows.
             raw.getState().setPickerActive(true);
-            await new Promise((resolve) => setTimeout(resolve, 400));
             const selection = await hostAdapter.selectProject();
             if (selection) {
               // Use the authoritative returned selection directly so the open is

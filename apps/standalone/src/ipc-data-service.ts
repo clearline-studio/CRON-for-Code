@@ -10,17 +10,33 @@ import type {
 import type { DataService, DataServiceConfig, CommandSummary } from '@cron-code/data-service';
 import type { OpenCodeApprovalReplyInput, OpenCodeApprovalReplyResult, OpenCodeRunEvent, OpenCodeRunInput, OpenCodeRunResult } from '@cron-code/data-service';
 interface LlmClient {
-  getConfig(): Promise<{ baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string }>;
-  saveConfig(config: { baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string }): Promise<void>;
-  test(config: { baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string }): Promise<{ ok: boolean; models: string[]; message: string }>;
+  getConfig(): Promise<LlmConfig>;
+  saveConfig(config: LlmConfig): Promise<void>;
+  test(config: LlmConfig): Promise<{ ok: boolean; models: string[]; message: string }>;
   chat(input: {
-    config: { baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string };
+    config: LlmConfig;
     model: string;
     message: string;
     route?: string;
     attachments?: Array<{ id: string; name: string; mimeType: string; size: number; kind: string; dataUrl?: string; text?: string }>;
     contextMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;
   }): Promise<{ text: string }>;
+}
+
+export interface LlmConfig {
+  cloud: {
+    baseUrl: string;
+    apiKey: string;
+    chatModel: string;
+    visionModel: string;
+    codingModel: string;
+    escalationModel: string;
+  };
+  ollama: {
+    baseUrl: string;
+    chatModel: string;
+    visionModel: string;
+  };
 }
 
 interface CronHostDb {
@@ -75,6 +91,22 @@ interface CronHostTray {
   onStopTask(callback: () => void): () => void;
 }
 
+interface FolderEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
+interface FolderListing {
+  path: string;
+  parent: string | null;
+  entries: FolderEntry[];
+}
+
+interface CronHostFs {
+  list(dir: string): Promise<FolderListing>;
+}
+
 interface CronHostDiag {
   marker(): Promise<{
     appVersion: string;
@@ -97,7 +129,8 @@ interface CronHostDiag {
 declare global {
   interface Window {
     cronHost: {
-      selectFolder: () => Promise<string | null>;
+      selectFolder: (dir?: string) => Promise<string | null>;
+      fs: CronHostFs;
       db: CronHostDb;
       task: {
         runNow(taskId: string, commandId?: string): Promise<void>;
@@ -115,12 +148,12 @@ declare global {
       app: CronHostApp;
       tray: CronHostTray;
       diag: CronHostDiag;
-      lmStudio: {
-        getConfig(): Promise<{ baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string }>;
-        saveConfig(config: { baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string }): Promise<void>;
-        test(config: { baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string }): Promise<{ ok: boolean; models: string[]; message: string }>;
+      model: {
+        getConfig(): Promise<LlmConfig>;
+        saveConfig(config: LlmConfig): Promise<void>;
+        test(config: LlmConfig): Promise<{ ok: boolean; models: string[]; message: string }>;
         chat(input: {
-          config: { baseUrl: string; textModel: string; visionModel: string; codingModel: string; escalationModel: string };
+          config: LlmConfig;
           model: string;
           message: string;
           route?: string;
@@ -138,10 +171,10 @@ export const INCOMPLETE_HOST_MESSAGE =
 
 export function createIpcLlmClient(): LlmClient {
   return {
-    getConfig: () => window.cronHost.lmStudio.getConfig(),
-    saveConfig: (config) => window.cronHost.lmStudio.saveConfig(config),
-    test: (config) => window.cronHost.lmStudio.test(config),
-    chat: (input) => window.cronHost.lmStudio.chat(input),
+    getConfig: () => window.cronHost.model.getConfig(),
+    saveConfig: (config) => window.cronHost.model.saveConfig(config),
+    test: (config) => window.cronHost.model.test(config),
+    chat: (input) => window.cronHost.model.chat(input),
   };
 }
 

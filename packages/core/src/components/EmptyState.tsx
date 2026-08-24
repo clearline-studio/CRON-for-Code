@@ -40,16 +40,16 @@ export function EmptyState({ onSelectProject }: EmptyStateProps) {
               style={logoStyleProp}
             />
           ) : (
-            <FolderOpen size={52} opacity={0.35} color="#5f7392" />
+            <FolderOpen size={44} opacity={0.35} color="#5f7392" />
           )}
           <div style={headingStyle}>CRON for Code</div>
-          <div style={subtitleStyle}>Plan with Gemma. Build with the coding agent. You stay in charge.</div>
+          <div style={subtitleStyle}>Plan with CRON. Build with the coding agent. You stay in charge.</div>
           <div style={descStyle}>
             Open or resume a local project to plan, execute, verify, and release code changes with governance built in.
           </div>
           <div style={actionsStyle}>
             <button onClick={onSelectProject} style={ctaStyle}>
-              <Plus size={17} /> Open Project
+              <Plus size={15} /> Open Project
             </button>
           </div>
           {resumeProjects.length > 0 && (
@@ -64,22 +64,22 @@ export function EmptyState({ onSelectProject }: EmptyStateProps) {
                 >
                   <span style={resumeNameStyle}>{project.name}</span>
                   <span style={resumePathStyle}>{project.rootPath}</span>
-                  <ArrowRight size={15} style={resumeArrowStyle} />
+                  <ArrowRight size={14} style={resumeArrowStyle} />
                 </button>
               ))}
             </div>
           )}
           <div style={chipsStyle}>
             <div style={chipStyle}>
-              <Cpu size={10} />
-              <span>Planner: Gemma</span>
+              <Cpu size={9} />
+              <span>Planner: CRON</span>
             </div>
             <div style={{ ...chipStyle, borderColor: 'rgba(56, 189, 248, 0.25)', color: '#38bdf8' }}>
-              <Shield size={10} />
+              <Shield size={9} />
               <span>Executor: OpenCode</span>
             </div>
             <div style={{ ...chipStyle, borderColor: 'rgba(245, 158, 11, 0.25)', color: '#f59e0b' }}>
-              <Shield size={10} />
+              <Shield size={9} />
               <span>Release Gate: Locked</span>
             </div>
           </div>
@@ -95,19 +95,23 @@ export function EmptyState({ onSelectProject }: EmptyStateProps) {
 }
 
 const wrapperStyle: CSSProperties = {
-  display: 'flex',
+  position: 'relative',
   width: '100%',
   height: '100%',
   fontFamily: 'var(--cron-font-family)',
-  position: 'relative',
   zIndex: 1,
   overflow: 'auto',
   background: 'linear-gradient(to right, rgba(3, 12, 28, 0.40), rgba(3, 12, 28, 0.10) 58%, rgba(3, 12, 28, 0.02))',
 };
 
+// The content zone spans the FULL pane so the welcome card reads centred in the
+// available centre space (polish round 2); the art panel is a right-side
+// backdrop that never skews the card off-centre.
 const contentZoneStyle: CSSProperties = {
-  flex: '1 1 0',
-  minWidth: 0,
+  position: 'relative',
+  zIndex: 1,
+  width: '100%',
+  height: '100%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -119,7 +123,7 @@ const cardStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'flex-start',
-  maxWidth: 560,
+  maxWidth: 480,
   width: '100%',
   textAlign: 'left',
   gap: 'var(--cron-space-md)',
@@ -127,15 +131,17 @@ const cardStyle: CSSProperties = {
   backdropFilter: 'blur(12px)',
   WebkitBackdropFilter: 'blur(12px)',
   border: '1px solid var(--cron-panel-border)',
-  borderRadius: 14,
-  padding: '34px 40px',
+  borderRadius: 12,
+  padding: '28px 34px',
   boxShadow: '0 24px 70px rgba(0, 0, 0, 0.34)',
 };
 
 const artZoneStyle: CSSProperties = {
-  flex: '0 1 clamp(240px, 34vw, 460px)',
-  minWidth: 0,
-  position: 'relative',
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  width: 'clamp(240px, 34vw, 460px)',
   backgroundImage: 'var(--cron-shell-bg-image)',
   backgroundSize: 'cover',
   backgroundPosition: 'center 18%',
@@ -150,14 +156,14 @@ const artGlowStyle: CSSProperties = {
 };
 
 const logoStyleProp: CSSProperties = {
-  width: 176,
+  width: 150,
   height: 'auto',
   opacity: 0.9,
   marginBottom: 4,
 };
 
 const headingStyle: CSSProperties = {
-  fontSize: 28,
+  fontSize: 24,
   fontWeight: 300,
   color: '#eaf2ff',
   letterSpacing: 0.5,
@@ -189,11 +195,11 @@ const ctaStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 7,
-  padding: '10px 28px',
+  padding: '9px 24px',
   background: 'var(--cron-accent)',
   color: 'white',
   border: 'none',
-  borderRadius: 7,
+  borderRadius: 6,
   cursor: 'pointer',
   fontSize: 'var(--cron-font-size-md)',
   fontFamily: 'var(--cron-font-family)',
@@ -222,10 +228,10 @@ const resumeCardStyle: CSSProperties = {
   alignItems: 'center',
   gap: 10,
   width: '100%',
-  padding: '10px 14px',
+  padding: '8px 12px',
   background: 'rgba(13, 26, 48, 0.72)',
   border: '1px solid var(--cron-panel-border)',
-  borderRadius: 8,
+  borderRadius: 7,
   cursor: 'pointer',
   color: '#eaf2ff',
   fontFamily: 'var(--cron-font-family)',

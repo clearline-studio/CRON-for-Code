@@ -1617,7 +1617,7 @@ no tests changed (main.mjs has no vitest coverage; launcher tests unaffected).
 
 ---
 
-## Audit + Fix Sweep � 2026-08-14 (CC/OpenCode)
+## Audit + Fix Sweep � 2026-08-14 (CC/OpenCode)
 
 Task: `CC_CODE_AUDIT_AND_FIX_PROMPT.md` - full audit (tests, security, dead code, restart/tray wiring) then fix what is safe, verify, report. Repo `C:\Users\venes\projects\CRON APPS\CRON for Code`, branch `main`, nothing staged.
 
@@ -1654,3 +1654,253 @@ Task: `CC_CODE_AUDIT_AND_FIX_PROMPT.md` - full audit (tests, security, dead code
 - The stale-test hazard: a deliberate design change (shortcut identity fix) left 3 tests asserting the OLD contract. Tests must be updated in lockstep with intentional behaviour changes; the prior session's "launcher tests unaffected" note was wrong.
 - The install-command guard regex matches any `pnpm install` string, including user-facing error messages - keep messages free of literal command forms or the guard stays noisy.
 - `shell:true` in dev.mjs is safe ONLY because every argument is a fixed literal; it exists to spawn pnpm.cmd/electron shims on Windows.
+
+---
+
+## CRON for Code UI Fixes #2-#5 Execution Entry - 2026-08-17 (CC/OpenCode)
+
+Task: `CC_CODE_UI_FIXES_PROMPT.md` - 4 targeted UI fixes (#2 restart button, #3 cronify file picker, #4 cronify tray menu, #5 fix sidebar clipping). No architectural changes, no commits. Repo `C:\Users\venes\projects\CRON APPS\CRON for Code`, branch `main`.
+
+### Fix #2 - Wire Restart Button into the Layout
+- Deleted dead `packages/core/src/components/CronHeader.tsx` (never rendered by a live component).
+- `Layout.tsx` top bar now renders a "Restart CRON for Code" icon button before the settings gear, styled to `iconButtonStyle`: `RefreshCw` normally, `Loader2` spinner (`cron-spin`) while `isRestarting`, disabled + `aria-busy` while restarting, `data-testid="cron-restart-button"` (kept for the dev click-probe diagnostic). Click calls store `restartApp()` via `useWorkspaceStoreRaw`. Status pill also carries `data-testid="cron-online-status"`.
+- Tests: removed the 2 CronHeader status tests from `dev-marking.test.tsx`; added a restart-button render test in `project-management.test.tsx` (button rendered, click calls host restart bridge, button disables while `isRestarting`); updated `repo-stabilisation.test.ts` to assert the status pill + restart button live in Layout instead of reading the deleted CronHeader.
+
+### Fix #3 - Cronify File Picker
+- Replaced the raw OS folder dialog in the "New Project" flow with a CRON-styled in-app folder browser. `PickerModal.tsx` rewritten: dark-navy panel (`#07142a` family), breadcrumb navigation, "Up" button, current-folder listing with folder/file icons, "Select this folder" + "Cancel" buttons, empty/error/loading states. Keeps `data-testid="picker-modal"`, `PROJECT PICKER` eyebrow, `Choosing your project folder` title.
+- New `packages/core/src/folder-picker.ts`: host-agnostic bridge (list/confirm) + `awaitFolderSelection`/`settleFolderSelection` deferred resolution so `selectFolder()` resolves exactly when the modal settles.
+- Electron main: new IPC `cron:fs:list` (resolved dir listing + `parent` pointer for Up/breadcrumbs; empty arg = `os.homedir()`); `cron:select-folder` now validates a passed path (throws on inaccessible/non-directory) and keeps the native dialog ONLY as a backward-compatible no-arg fallback. Added `cron:fs:list` to `ALL_IPC_CHANNELS`.
+- Preload exposes `fs.list`; `selectFolder` accepts an optional path arg. `main.tsx` wires `selectFolder: () => awaitFolderSelection()` and a `folderPicker` bridge (`list`/`confirm`); `App.tsx` passes it to Layout and no longer waits 400 ms before opening the picker.
+- Tests: `dev-marking.test.tsx` picker-flow tests still pass (modal driven by `pickerActive`); `repo-stabilisation.test.ts` picker test updated to assert the in-app browser (`Select this folder`, `cron:fs:list` in main + preload).
+
+### Fix #4 - Cronify Tray Context Menu
+- Windows native tray menus are OS-rendered (no CSS possible), so Option A was applied: a correct, clearly-labelled item list. New pure `apps/standalone/electron/tray-template.mjs` (+ `tray-template.d.mts` types) with the expected items: Open CRON for Code / Show active tasks / Pause current task / Stop current task / Quit CRON for Code (with separators). `createTray()` now builds from it; items renamed from "Open CC"/"Quit CC".
+- New `packages/core/src/tray-template.test.ts` (2 tests): item labels/order + click-action wiring.
+
+### Fix #5 - Fix Sidebar Lower-Stack Clipping
+- `Sidebar.tsx` `lowerStackStyle` removed `minHeight: 0` so the fixed lower stack keeps its natural height and never shrinks/clips its CURRENT PROJECT / AGENT STATE / Settings / Account blocks; the projects list above remains the only shrinkable+scrollable region (`flex:1, min-height:0, overflow:auto`).
+- Strengthened the lower-stack tests in `workspace-layout.test.tsx` and `project-management.test.tsx`: assert `flexShrink:0`, `minHeight` NOT `0px` on the lower stack, and `overflow:auto` + `minHeight:0px` on `sidebar-projects`.
+
+### Verification (all PASS)
+- `pnpm -r run test`: 326/326 (contracts 24, data-service 94, host-adapter 23, core 185).
+- `pnpm run typecheck`: all packages clean.
+- `pnpm run lint`: 0 errors, 3 pre-existing `react-hooks/exhaustive-deps` warnings (App.tsx).
+- `pnpm run build`: all packages + standalone `dist-renderer` clean.
+- `git status`: no staging/commits; working tree contains this session's files plus prior sessions' intentional uncommitted work.
+
+### CC Training Notes (slice 26)
+- The dead-code pattern: a fully-working component (`CronHeader`) with tests can still be unreachable dead code when Layout renders its own top bar. Delete it and move the capability into the live tree; update the source-assertion tests (repo-stabilisation) in lockstep, not just the component tests.
+- The write/escape hazard: tools that interpret `\` escapes will mangle backslash literals inside template literals (`` `${x}\\` `` became an unterminated template literal and cascading parse errors). Avoid literal backslashes in written source (use `String.fromCharCode(92)`), then re-verify bytes.
+- `react-hooks/set-state-in-effect` (React Compiler lint) rejects synchronous setState in effect bodies. The documented fix is the render-time "adjust state when a tracked prop changes" pattern (set `sessionActive` in render), leaving the effect body a pure subscription; event-handler setState is fine.
+- Electron `preserve-caught-error` lint requires `{ cause: err }` on throws inside catch blocks - attach the cause when rethrowing in new IPC handlers.
+- A testable main-process surface (tray template, IPC registrar) belongs in pure Electron-free modules with `.d.mts` declarations so core vitest can import them; native OS UI (tray menu) gets correctness+ordering tests rather than styling claims.
+
+---
+
+## Product Truth + Architecture Direction-Lock Audit — 2026-08-21 (CC/OpenCode, read-only audit + direction lock)
+
+### Task type
+Read-only truth audit + direction-lock per BB. No implementation slice executed. Working tree
+dirty (12 modified tracked + untracked prompt/log files) — treated as prior user/agent work,
+read before judging, nothing reset/cleaned/reverted/staged/committed.
+
+### Repository identity (verified)
+Branch `main`, HEAD `e18dfb7` (`Security cleanup, tray wiring, test fixes, and audit hardening`).
+History now includes `069a65c` (governed execution, approvals, OpenCode runner, project
+management, IPC infra) and `71eaf50` (architecture logs/evidence/docs) on top of `8157b12`.
+Note for the logs: PROJECT_LOG/CRON_ARCHITECT_LOG entries written since 2026-08-04 repeatedly
+stated "nothing committed"; the repo HAS since gained those three commits (069a65c, 71eaf50,
+e18dfb7). Logs lag the actual Git history — flagging for the Architect, not changing.
+
+### LOCKED PRODUCT TRUTH (BB direction, 2026-08-21)
+- **CRON for Code = the non-coder's coder app.** Plain-language prompt in → useful thing out.
+- **OpenCode is the real coding engine.** CRON for Code is the friendly, safe, non-technical
+  wrapper around it (plan/progress in plain English, approval gates, changed-file review,
+  evidence/verification, preview/test/export guidance, rollback expectations, no secret
+  printing, no Git commit/push/reset/clean without explicit Venessa approval).
+- **Cloud-first model routing, Ollama local fallback, no LM Studio.** Automatic inside a
+  session; truthful model labels only. LM Studio is retired everywhere in CRON.
+- **Two shells, ONE engine.** (1) Code Standalone = full desktop app; (2) Code inside
+  Intelligence = routed capability/module later. Never duplicate the coding engine; later
+  Intelligence hands coding/build/fix/app/site/tool requests to Code. The user never knows
+  which shell they are in.
+- **Plain roles:** Intelligence/Gem thinks, remembers, plans, routes. Code builds things with
+  code. OpenCode performs the actual edits/runs. Venessa is final approval authority.
+- No commit/push/reset/clean without Venessa approval.
+
+### What the audit proved (evidence in the report)
+- OpenCode runner IS wired as the real engine: `packages/data-service/src/opencode-runner.ts`
+  (OpenCodeRunner + CLI/server adapters), approval/resume on the SAME session/execution,
+  project-boundary enforcement, audit trail, plain-English activity mapping
+  (`activity-english.ts`), live IPC stream (`cron:opencode:event`). 7 runner tests + 3 mock
+  server-adapter tests prove the verified installed API contract.
+- Prompt → OpenCode task works end to end: CronAssistant routes code-ish prompts →
+  `createDraftTask` → `openCodeRunner.runTask` → IPC → main → OpenCode server session.
+- OpenCode runs headlessly/server-style (`createOpenCodeServerAdapter`: `opencode serve` +
+  HTTP `/session` + `/permission/{id}/reply`, Basic auth from `OPENCODE_SERVER_*`).
+- Approval + resume after approval works (same-session, same execution record, follow-up
+  permissions).
+- UI explains OpenCode in non-technical language (`activity-english.ts`); changed-file +
+  evidence review exists in the Review pane but is HEURISTIC (regex over stdout + permission
+  filepath) — not a real `git status`/diff walk.
+- Project boundaries are enforced at EXECUTION time (project-boundary service); the folder
+  picker itself has NO repository-boundary allowlist at selection time.
+- Git-risky actions: OpenCode is told via prompt constraints not to commit/push/reset/clean;
+  the command catalogue denies Git mutations for catalogue commands; there is NO structural
+  block that OpenCode (the real agent) cannot run git — the approval gate is the only hard
+  control. GAP.
+- LM Studio assumptions are still live in code: `main.mjs` (DEFAULT_LM_STUDIO_CONFIG,
+  `cron:lmstudio:*`, baseUrl `http://192.168.1.42:1234/v1`), `preload.cjs`, `ipc-data-service.ts`,
+  `LlmSettings.tsx`, `llm.ts`, `chat-runtime.ts` defaults, `CronAssistant` planner error
+  strings, `register-ipc.mjs` channel list.
+- No Ollama/OpenRouter/Anthropic/OpenAI provider layer exists yet. Escalation route is
+  BLOCKED in code (`DeepSeek V4 Pro escalation was requested but explicit escalation approval
+  is not implemented`).
+- Reusable-core vs standalone-shell boundary is already clean: `packages/core` AppDeps inject
+  dataService / hostAdapter / llm / openCodeRunner / tray / folderPicker — the SAME core can be
+  embedded by Intelligence with its own deps. No duplication exists today.
+
+### Verification (all exit 0)
+- `pnpm test` PASS — 326 tests (contracts 24, data-service 94, host-adapter 23, core 185).
+- `pnpm typecheck` PASS. `pnpm lint` PASS (0 errors, 3 pre-existing exhaustive-deps warnings).
+- `pnpm build` PASS (packages + standalone `dist-renderer`).
+- `git diff --check` clean (only LF→CRLF advisories).
+- No Windows/Vite sandbox access issue encountered this run.
+
+### Recommended next slice (direction-locked, small)
+Replace stale LM Studio provider/settings/docs with cloud-first + Ollama-fallback routing
+while preserving the OpenCode runner wiring and tests. Do this inside the reusable core
+boundary so Intelligence can embed it later (no engine duplication, no Intelligence build now).
+
+### Boundary
+Read-only audit. No source/test/config/dependency/lockfile changes by CC. No Git mutation
+(nothing staged/committed/pushed/reset/restored/cleaned). Only PROJECT_LOG.md,
+CRON_ARCHITECT_LOG.md, and the audit report files are appended/created.
+
+### CC Training Notes (slice 27)
+- Logs lag reality: PROJECT_LOG/CRON_ARCHITECT_LOG still claim "nothing committed" while Git
+  now has 069a65c/71eaf50/e18dfb7. Always re-verify `git log` against the log prose on a fresh
+  session instead of trusting the last entry's status claims.
+- The runner's "no git mutation" rule is prompt-level, not structural. A real coding agent can
+  still run git; treat the approval gate as the only hard control and say so honestly.
+- Changed-file evidence is derived from stdout/permission metadata, not a real `git status`
+  walk — report it as heuristic until a read-only git-status IPC exists.
+
+---
+
+## Model Provider Refactor Execution Entry — 2026-08-21 (CC/OpenCode)
+
+### Scope
+Narrow slice per BB: product direction lock (non-coder's coder app powered by OpenCode),
+replace active LM Studio assumptions with cloud-first + Ollama-fallback model routing, keep
+OpenCode untouched, add non-coder wording, document the embeddable Intelligence boundary,
+update tests. No commit/push/reset/clean.
+
+### What changed
+- **Core routing (`packages/core/src/llm.ts`, `chat-runtime.ts`):** `LlmConfig` is now
+  `{ cloud: { baseUrl, apiKey, chatModel, visionModel, codingModel, escalationModel },
+     ollama: { baseUrl, chatModel, visionModel } }`. Default cloud = `https://api.openrouter.ai/api/v1`;
+  default Ollama fallback = `http://127.0.0.1:11434/v1`. New `activePlannerProvider` (cloud-first
+  with Ollama fallback). `resolveRouteStatus` labels are truthful and derived from configured
+  models: `Coding agent` (executor), `Deeper reasoning` (escalation), `Planner`/`Vision`
+  (read-only, "Cloud AI, local Ollama fallback"). No hardcoded "Flash"/"Pro" claims; no "via LM
+  Studio". `buildOpenCodeHandoffPrompt` uses `cloud.codingModel`/`cloud.escalationModel` and
+  generic wording. `PLANNER_ROLE` is provider-neutral (no "Gemma").
+- **Settings UI:** `LlmSettings.tsx` → new `ModelSettings.tsx` ("AI Settings" — Cloud AI +
+  Local AI (Ollama) sections, API key field kept local, Ollama default `:11434`). Old file kept
+  only as a deprecated re-export shim (no imports). `Layout.tsx` renders `ModelSettings`.
+- **Electron (`main.mjs`):** `DEFAULT_LM_STUDIO_CONFIG` → `DEFAULT_MODEL_CONFIG`; new
+  `cron:model:get-config/save-config/test/chat` replace `cron:lmstudio:*`. Chat is cloud-first
+  with automatic Ollama fallback; test probes both providers truthfully; API key is sent to the
+  provider only, never logged or returned. Dev-drive diagnostic now checks for "Cloud AI".
+- **IPC surface:** `register-ipc.mjs` channels, `preload.cjs` bridge (`model`), and
+  `ipc-data-service.ts` typing all renamed from `lmstudio` to `model`.
+- **Wording:** planner header "Planner — Gemma" → "Planner"; error strings no longer mention
+  LM Studio; `activity-english.ts` friendly labels truthful (removed Gemma claim).
+- **Docs:** README status + "What this is" + "Model providers" + "Embeddable boundary".
+- **Tests:** `chat-runtime.test.ts` rewritten (cloud/Ollama defaults, fallback, truthful
+  labels, handoff); `repo-stabilisation.test.ts` now guards model IPC channels, Ollama `:11434`
+  (not `:1234`), and asserts no visible "LM Studio"/"lmstudio" in active product source; new
+  `model-settings.test.tsx` (Cloud AI + Local AI (Ollama), no LM Studio wording); updated
+  `workspace-layout.test.tsx` and `activity-english.test.ts`.
+
+### Preserved (unchanged)
+OpenCode runner + server adapter + approval/resume (7 runner tests + 3 server-adapter tests
+green), audit records, changed-file review, project-boundary checks, command catalogue, no
+commit/push/reset/clean without approval.
+
+### Verification (all exit 0)
+- `pnpm test` PASS — 334 tests (contracts 24, data-service 94, host-adapter 23, core 193 / 16 files).
+- `pnpm typecheck` PASS. `pnpm lint` PASS (0 errors, 3 pre-existing exhaustive-deps warnings).
+- `pnpm build` PASS (packages + standalone `dist-renderer`).
+- `git diff --check` clean (only LF→CRLF advisories).
+
+### Notes
+- Rebuilt `@cron-code/core` dist before standalone typecheck (stale-dist issue, per training).
+- Two lint iterations on `main.mjs` (unused inner catch var + `no-useless-assignment`) fixed.
+- `LlmSettings.tsx` is a deprecated shim (no active imports); the no-LM-Studio guard scans
+  active product source only, not docs/historical logs.
+
+### Boundary
+No Git mutation (nothing staged/committed/pushed/reset/restored/cleaned). No dependency or
+lockfile changes. Only the files listed above + logs + README were touched.
+
+### CC Training Notes (slice 28)
+- The `no-useless-assignment` rule flags `let x = value;` when the first use is a reassignment
+  in a try/catch before any read — declare `let x;` instead of seeding a dead initial value.
+- ESLint's `preserve-caught-error` wants the throw inside a catch to preserve THAT catch's
+  error as `cause`; when combining cloud→Ollama fallback, structure it as two sibling
+  try/catch blocks (capture first error in a plain variable) rather than a nested catch.
+- Standalone typechecks against core's BUILT dist — rebuild `@cron-code/core` after changing
+  the public `LlmConfig` shape or the standalone typecheck reports a confusing mismatched-type
+  error pointing at `packages/core/dist/llm`. Same rule as earlier slices.
+
+---
+
+## Self-Starting Dev-Mode Taskbar Shortcut — 2026-08-24 (BB, implementation)
+
+### Scope
+Make the taskbar shortcut launch CRON for Code in DEV mode (fresh source via Vite, not the
+stale built `dist-renderer`) with a single taskbar icon. Direct `electron.exe . --dev` now
+self-starts Vite when it isn't already running.
+
+### What changed
+- **`apps/standalone/electron/main.mjs`:** when `IS_DEV`, before `loadURL(DEV_URL)`, probe the
+  dev URL (global `fetch` + `AbortSignal.timeout(1500)`). If unreachable, spawn the SAME Vite
+  command `dev.mjs` uses (`pnpm exec vite --port <port>` from `projectRoot`, `shell: true`,
+  `windowsHide: true`, stdout/stderr appended to `.runtime/code-dev-vite-direct.log`,
+  `CRON_DEV: '1'` env), store the child in module-level `selfStartedViteProcess`, poll every
+  ~500 ms (bounded 30 s) for the URL, and log progress/errors via the existing `logger`. On
+  failure it proceeds to `loadURL` anyway (existing startup diagnostics surface the failure).
+  A separate `app.on('before-quit')` kills ONLY a Vite WE spawned (win32 `taskkill /PID /T /F`,
+  else SIGTERM), then clears the handle. Added `node:child_process` `spawn`/`spawnSync` import.
+  Production/normal mode (`loadFile(RENDERER_ENTRY)`) untouched.
+- **`scripts/create-code-dev-shortcut.ps1`:** `Arguments` `'.'` → `'. --dev'`; description →
+  `'CRON for Code - development app (dev mode, self-starting)'`; final `Target:` output reflects
+  the `--dev` arg. Everything else (electron.exe target, working dir, icon) unchanged.
+- **`packages/core/src/repo-stabilisation.test.ts`:** one assertion adjusted (see below).
+
+### Assertion adjusted (only one)
+`expect(main).not.toContain('spawn(')` (restart-safety guard in `repo-stabilisation.test.ts`)
+asserted main.mjs had NO `spawn(` anywhere; it now legitimately spawns Vite at startup. Narrowed
+to the restart handler region only: `expect(main).not.toMatch(/performAppRestart[\s\S]{0,3000}spawn\(/)`.
+The `'powershell.exe'` and `run-code-dev-hidden.ps1` safety guards are unchanged.
+
+### Verification (all pass)
+- `pnpm test` PASS — 362 tests (contracts 24, data-service 94, host-adapter 23, core 221).
+  (One run showed a flaky timing-sensitive restart-overlay test timing out under parallel load;
+  it passes in isolation and on the re-run, unrelated to this change.)
+- `pnpm typecheck` PASS (all 7 packages).
+- `pnpm build` PASS (packages + standalone `dist-renderer`).
+- `git diff --check` clean (exit 0; only pre-existing LF→CRLF advisories).
+- `scripts/test-code-dev-launcher.ps1` PASS standalone (94 assertions, no shortcut-arg
+  assertions affected by `. --dev`).
+
+### Current state
+Working tree dirty (pre-existing uncommitted work + this slice). Nothing staged/committed/pushed.
+
+### BB Training Notes (slice 29)
+- A repo-wide `not.toContain('spawn(')` on main.mjs is a proxy that breaks the moment a new
+  legitimate spawn is added; scope such guards to the exact function region they protect.
+- The dev-server self-start must check reachability BEFORE spawning to avoid double-Vite when
+  `dev.mjs`/the launcher already owns a server on 5190.

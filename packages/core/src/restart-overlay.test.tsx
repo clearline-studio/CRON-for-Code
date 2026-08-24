@@ -143,10 +143,10 @@ describe('RestartOverlay', () => {
     // From first paint the overlay is visible (covers the relaunch gap).
     expect(screen.getByTestId('restart-overlay')).toBeTruthy();
 
-    // Once the app finished loading (entry screen ready UNDER the overlay),
+    // Once the app finished loading (Home screen ready UNDER the overlay),
     // the overlay must still be present: it lingers a minimum perceivable time
     // instead of flashing away the instant readiness is reached.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Open Project/i })).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeTruthy());
     expect(screen.getByTestId('restart-overlay')).toBeTruthy();
 
     // After the linger floor elapses, the overlay fades out (aria-hidden) and

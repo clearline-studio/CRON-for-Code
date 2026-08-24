@@ -1,9 +1,21 @@
-export interface LlmConfig {
+export interface CloudLlmConfig {
   baseUrl: string;
-  textModel: string;
+  apiKey: string;
+  chatModel: string;
   visionModel: string;
   codingModel: string;
   escalationModel: string;
+}
+
+export interface OllamaLlmConfig {
+  baseUrl: string;
+  chatModel: string;
+  visionModel: string;
+}
+
+export interface LlmConfig {
+  cloud: CloudLlmConfig;
+  ollama: OllamaLlmConfig;
 }
 
 export type LlmRoute = 'local-chat' | 'local-vision' | 'opencode-flash' | 'pro-escalation';

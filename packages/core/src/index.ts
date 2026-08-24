@@ -13,6 +13,15 @@ export type {
 export { WorkspaceProvider, WorkspaceStoreContext, useWorkspaceStore, useWorkspaceStoreRaw } from './context.js';
 
 export { Layout } from './components/Layout.js';
+export { LeftNav, LogoHeader } from './components/LeftNav.js';
+export type { LeftNavItemId } from './components/LeftNav.js';
+export { LeftTabStrip } from './components/LeftTabStrip.js';
+export type { LeftTabId } from './components/LeftTabStrip.js';
+export { ProjectBrowser } from './components/ProjectBrowser.js';
+export { AccountArea } from './components/AccountArea.js';
+export { ProfileFooter, ProfileAvatar } from './components/ProfileFooter.js';
+export { RightSidebar } from './components/RightSidebar.js';
+export type { RightTabId } from './components/RightSidebar.js';
 export type { LlmClient, LlmConfig } from './llm.js';
 export type { LlmAttachment, LlmRoute } from './llm.js';
 export type {
@@ -51,5 +60,15 @@ export { ActivityPanel } from './components/ActivityPanel.js';
 export { ErrorBanner } from './components/ErrorBanner.js';
 export { RestartOverlay } from './components/RestartOverlay.js';
 export { PickerModal } from './components/PickerModal.js';
+export { awaitFolderSelection, settleFolderSelection } from './folder-picker.js';
+export type { FolderEntry, FolderListing, FolderPickerBridge } from './folder-picker.js';
 export { EmptyState } from './components/EmptyState.js';
+export { HomeScreen } from './components/HomeScreen.js';
+export { TemplatesScreen } from './components/TemplatesScreen.js';
+export { MyAppsScreen } from './components/MyAppsScreen.js';
+export { DeploymentsScreen } from './components/DeploymentsScreen.js';
+export { LearnScreen } from './components/LearnScreen.js';
+export { STARTER_TEMPLATES } from './starter-templates.js';
+export type { StarterTemplate } from './starter-templates.js';
+export { relativeTime } from './time.js';
 export { ChangedFilesReview } from './components/ChangedFilesReview.js';

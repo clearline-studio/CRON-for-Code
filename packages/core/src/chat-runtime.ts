@@ -21,26 +21,34 @@ export interface RouteStatus {
 }
 
 export const DEFAULT_LLM_CONFIG: LlmConfig = {
-  baseUrl: 'http://127.0.0.1:1234/v1',
-  textModel: 'gemma-4-26b-a4b-qat',
-  visionModel: 'gemma-4-26b-a4b-qat',
-  codingModel: 'deepseek/deepseek-v4-flash',
-  escalationModel: 'deepseek/deepseek-v4-pro',
+  cloud: {
+    baseUrl: 'https://api.openrouter.ai/api/v1',
+    apiKey: '',
+    chatModel: 'deepseek/deepseek-v4-flash',
+    visionModel: 'qwen/qwen-2-vl-7b-instruct',
+    codingModel: 'deepseek/deepseek-v4-flash',
+    escalationModel: 'deepseek/deepseek-v4-pro',
+  },
+  ollama: {
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    chatModel: 'llama3.1',
+    visionModel: 'llava',
+  },
 };
 
 /**
  * LOCKED agent role model (Architect-approved):
- * GEMMA = planner / architect / read-only project companion.
- * The planner transport (this chat surface) has NO mutation operations —
- * it only chats. File-mutating work routes exclusively through the OpenCode
- * executor (coding model). Venessa remains the final approval authority.
+ * The planner is a read-only project companion. The planner transport
+ * (local chat/vision routes) has NO mutation operations — it only chats.
+ * File-mutating work routes exclusively through the OpenCode executor
+ * (coding model). Venessa remains the final approval authority.
  */
 export const PLANNER_ROLE = Object.freeze({
-  id: 'gemma-planner',
+  id: 'cron-planner',
   label: 'Planner',
-  model: DEFAULT_LLM_CONFIG.textModel,
+  model: DEFAULT_LLM_CONFIG.cloud.chatModel,
   readOnly: true as const,
-  description: 'Gemma plans, explains, and reviews. It never changes files.',
+  description: 'The planner plans, explains, and reviews. It never changes files.',
 });
 
 /** Routing prefixes that hand work to the file-mutating executor (never the planner). */
@@ -105,29 +113,49 @@ export function safeParseMessages(raw: string | null): ChatMessage[] {
   }
 }
 
+/**
+ * Cloud-first with a local Ollama fallback. The active planner provider is the
+ * cloud when a cloud endpoint and chat model are configured (the default);
+ * otherwise a configured Ollama endpoint is used. This is a truthful label for
+ * the route the UI shows, not a live reachability probe (the chat transport
+ * itself falls back cloud -> Ollama at request time).
+ */
+export function activePlannerProvider(config: LlmConfig | null): 'cloud' | 'ollama' {
+  const cfg = config ?? DEFAULT_LLM_CONFIG;
+  const cloudReady = cfg.cloud.baseUrl.trim() !== '' && cfg.cloud.chatModel.trim() !== '';
+  if (cloudReady) return 'cloud';
+  const ollamaReady = cfg.ollama.baseUrl.trim() !== '' && cfg.ollama.chatModel.trim() !== '';
+  return ollamaReady ? 'ollama' : 'cloud';
+}
+
 export function resolveRouteStatus(config: LlmConfig | null, route: LlmRoute, hasImages: boolean): RouteStatus {
   const cfg = config ?? DEFAULT_LLM_CONFIG;
   if (route === 'opencode-flash') {
     return {
       route,
-      label: 'OpenCode',
-      model: cfg.codingModel,
-      detail: 'DeepSeek V4 Flash coding handoff',
+      label: 'Coding agent',
+      model: cfg.cloud.codingModel,
+      detail: 'Builds and edits code through the coding engine (OpenCode).',
     };
   }
   if (route === 'pro-escalation') {
     return {
       route,
-      label: 'Escalation',
-      model: cfg.escalationModel,
-      detail: 'DeepSeek V4 Pro optional fallback',
+      label: 'Deeper reasoning',
+      model: cfg.cloud.escalationModel,
+      detail: 'For harder tasks; used only with your approval.',
     };
   }
+  const provider = activePlannerProvider(cfg);
+  const providerNote = provider === 'cloud' ? 'Cloud AI, local Ollama fallback' : 'Local AI via Ollama';
+  const model = hasImages
+    ? (provider === 'cloud' ? cfg.cloud.visionModel : cfg.ollama.visionModel)
+    : (provider === 'cloud' ? cfg.cloud.chatModel : cfg.ollama.chatModel);
   return {
     route: hasImages ? 'local-vision' : 'local-chat',
     label: hasImages ? 'Vision' : 'Planner',
-    model: hasImages ? cfg.visionModel : cfg.textModel,
-    detail: hasImages ? 'Gemma planner (read-only) via LM Studio vision route' : 'Gemma planner (read-only) via LM Studio chat route',
+    model,
+    detail: `${model} (read-only) — ${providerNote}`,
   };
 }
 
@@ -147,7 +175,7 @@ export function buildOpenCodeHandoffPrompt(input: {
   return {
     title,
     body: [
-      'EXECUTION TASK — for the coding executor only (DeepSeek V4 Flash through OpenCode).',
+      'EXECUTION TASK — for the coding engine only (OpenCode).',
       '',
       'Goal:',
       input.prompt,
@@ -173,8 +201,8 @@ export function buildOpenCodeHandoffPrompt(input: {
       '',
       'Context:',
       `Project: ${projectLine}`,
-      `Primary coding model: ${cfg.codingModel}`,
-      `Escalation model: ${cfg.escalationModel} (only if Flash gets stuck; requires explicit escalation approval)`,
+      `Primary coding model: ${cfg.cloud.codingModel}`,
+      `Escalation model: ${cfg.cloud.escalationModel} (only if the primary model gets stuck; requires explicit escalation approval)`,
       `Attachments:`,
       attachmentLines,
     ].join('\n'),

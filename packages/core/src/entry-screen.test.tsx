@@ -60,7 +60,7 @@ describe('entry screen (balance + role chips)', () => {
     expect(screen.getByRole('button', { name: /Open Project/i })).toBeTruthy();
     expect(screen.getAllByText('CRON for Code').length).toBeGreaterThan(0);
     expect(screen.getByText('Resume a project')).toBeTruthy();
-    expect(screen.getByText(/Planner: Gemma/)).toBeTruthy();
+    expect(screen.getByText(/Planner: CRON/)).toBeTruthy();
     expect(screen.getByText(/Executor: OpenCode/)).toBeTruthy();
     expect(screen.getByText(/Release Gate: Locked/)).toBeTruthy();
     // Plain-language composition: the entry screen explains the roles instead of
@@ -72,6 +72,6 @@ describe('entry screen (balance + role chips)', () => {
     renderEntry(false);
     expect(screen.getByRole('button', { name: /Open Project/i })).toBeTruthy();
     expect(screen.queryByText('Resume a project')).toBeNull();
-    expect(screen.getByText(/Planner: Gemma/)).toBeTruthy();
+    expect(screen.getByText(/Planner: CRON/)).toBeTruthy();
   });
 });

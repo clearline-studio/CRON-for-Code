@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LLM_CONFIG,
+  activePlannerProvider,
   buildOpenCodeHandoffPrompt,
   compactContext,
   createChatMessage,
@@ -11,26 +12,68 @@ import {
   safeParseMessages,
 } from './chat-runtime.js';
 
-describe('chat runtime routing', () => {
-  it('defaults to the CRON AI stack routes', () => {
-    expect(DEFAULT_LLM_CONFIG.textModel).toBe('gemma-4-26b-a4b-qat');
-    expect(DEFAULT_LLM_CONFIG.visionModel).toBe('gemma-4-26b-a4b-qat');
-    expect(DEFAULT_LLM_CONFIG.codingModel).toBe('deepseek/deepseek-v4-flash');
-    expect(DEFAULT_LLM_CONFIG.escalationModel).toBe('deepseek/deepseek-v4-pro');
+describe('chat runtime routing (cloud-first, Ollama fallback)', () => {
+  it('defaults to a cloud provider with an Ollama local fallback', () => {
+    expect(DEFAULT_LLM_CONFIG.cloud.baseUrl).toBe('https://api.openrouter.ai/api/v1');
+    expect(DEFAULT_LLM_CONFIG.cloud.chatModel).toBe('deepseek/deepseek-v4-flash');
+    expect(DEFAULT_LLM_CONFIG.cloud.visionModel).toBe('qwen/qwen-2-vl-7b-instruct');
+    expect(DEFAULT_LLM_CONFIG.cloud.codingModel).toBe('deepseek/deepseek-v4-flash');
+    expect(DEFAULT_LLM_CONFIG.cloud.escalationModel).toBe('deepseek/deepseek-v4-pro');
+    expect(DEFAULT_LLM_CONFIG.ollama.baseUrl).toContain('11434');
+    expect(DEFAULT_LLM_CONFIG.ollama.chatModel).not.toHaveLength(0);
   });
 
-  it('reports local vision and OpenCode route status without model history ownership', () => {
+  it('picks the cloud as the active planner provider when configured', () => {
+    expect(activePlannerProvider(DEFAULT_LLM_CONFIG)).toBe('cloud');
+    expect(activePlannerProvider(null)).toBe('cloud');
+  });
+
+  it('falls back to Ollama when no cloud endpoint/model is configured', () => {
+    const localOnly = {
+      cloud: { ...DEFAULT_LLM_CONFIG.cloud, baseUrl: '', chatModel: '' },
+      ollama: DEFAULT_LLM_CONFIG.ollama,
+    };
+    expect(activePlannerProvider(localOnly)).toBe('ollama');
+    const status = resolveRouteStatus(localOnly, 'local-chat', false);
+    expect(status.detail).toContain('Local AI via Ollama');
+    expect(status.model).toBe(DEFAULT_LLM_CONFIG.ollama.chatModel);
+  });
+
+  it('reports planner and vision routes with truthful cloud labels (no LM Studio wording)', () => {
     expect(resolveRouteStatus(DEFAULT_LLM_CONFIG, 'local-chat', true)).toMatchObject({
       route: 'local-vision',
-      model: DEFAULT_LLM_CONFIG.visionModel,
+      model: DEFAULT_LLM_CONFIG.cloud.visionModel,
+      label: 'Vision',
     });
-    expect(resolveRouteStatus(DEFAULT_LLM_CONFIG, 'opencode-flash', false)).toMatchObject({
-      label: 'OpenCode',
-      model: DEFAULT_LLM_CONFIG.codingModel,
+    expect(resolveRouteStatus(DEFAULT_LLM_CONFIG, 'local-chat', false)).toMatchObject({
+      route: 'local-chat',
+      model: DEFAULT_LLM_CONFIG.cloud.chatModel,
+      label: 'Planner',
     });
+    const detail = resolveRouteStatus(DEFAULT_LLM_CONFIG, 'local-chat', false).detail;
+    expect(detail).toContain('read-only');
+    expect(detail).toContain('Cloud AI');
+    expect(detail).toContain('Ollama');
+    expect(detail).not.toMatch(/LM Studio/i);
   });
 
-  it('builds governed OpenCode handoff tasks with Flash primary and Pro fallback', () => {
+  it('labels the executor routes truthfully from the configured models', () => {
+    expect(resolveRouteStatus(DEFAULT_LLM_CONFIG, 'opencode-flash', false)).toMatchObject({
+      label: 'Coding agent',
+      model: DEFAULT_LLM_CONFIG.cloud.codingModel,
+    });
+    expect(resolveRouteStatus(DEFAULT_LLM_CONFIG, 'pro-escalation', false)).toMatchObject({
+      label: 'Deeper reasoning',
+      model: DEFAULT_LLM_CONFIG.cloud.escalationModel,
+    });
+    const custom = {
+      ...DEFAULT_LLM_CONFIG,
+      cloud: { ...DEFAULT_LLM_CONFIG.cloud, codingModel: 'provider/my-coding-model' },
+    };
+    expect(resolveRouteStatus(custom, 'opencode-flash', false).model).toBe('provider/my-coding-model');
+  });
+
+  it('builds governed OpenCode handoff tasks with the configured cloud models', () => {
     const handoff = buildOpenCodeHandoffPrompt({
       prompt: 'Fix the screenshot capture flow',
       project: {
@@ -50,13 +93,15 @@ describe('chat runtime routing', () => {
     expect(handoff.body).toContain('Primary coding model: deepseek/deepseek-v4-flash');
     expect(handoff.body).toContain('Escalation model: deepseek/deepseek-v4-pro');
     expect(handoff.body).toContain('Do not commit, push, reset, clean');
+    expect(handoff.body).not.toMatch(/Flash gets stuck/i);
   });
 });
 
-describe('locked agent role model (Gemma planner / OpenCode executor)', () => {
-  it('marks Gemma as the read-only planner companion', () => {
+describe('locked agent role model (read-only planner / OpenCode executor)', () => {
+  it('marks the planner as read-only and provider-neutral', () => {
     expect(PLANNER_ROLE.readOnly).toBe(true);
-    expect(PLANNER_ROLE.model).toBe('gemma-4-26b-a4b-qat');
+    expect(PLANNER_ROLE.model).toBe(DEFAULT_LLM_CONFIG.cloud.chatModel);
+    expect(PLANNER_ROLE.description).not.toMatch(/Gemma/i);
     expect(isPlannerRoute('local-chat')).toBe(true);
     expect(isPlannerRoute('local-vision')).toBe(true);
     expect(isPlannerRoute('opencode-flash')).toBe(false);

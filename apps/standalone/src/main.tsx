@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CronCodeApp } from '@cron-code/core';
+import { CronCodeApp, awaitFolderSelection } from '@cron-code/core';
+import type { FolderPickerBridge } from '@cron-code/core';
 import { createStandaloneHostAdapter } from '@cron-code/host-adapter';
 import type { HostProjectAction, HostProjectActionResult } from '@cron-code/host-adapter';
 import { createIpcDataService, createIpcLlmClient, createIpcOpenCodeRunnerClient, createIpcTrayClient } from './ipc-data-service.js';
@@ -8,6 +9,7 @@ import '@cron-code/design-tokens';
 
 import shellBgUrl from '../branding/assets/cron_shell_background.png';
 import logoUrl from '../branding/assets/code_logo_transparent.png';
+import logoVideoUrl from '../branding/assets/cron_logo_loop_small.mp4';
 
 async function performProjectAction(action: HostProjectAction): Promise<HostProjectActionResult> {
   switch (action.kind) {
@@ -45,9 +47,14 @@ async function restartApp(): Promise<void> {
 }
 
 async function bootstrap() {
+  // Splash hold floor (design polish): the pre-React splash must be visible for
+  // a ~3s minimum on both initial launch and restart so it never reads as a
+  // glitchy 1s flash. The splash hides at max(3000ms, ready).
+  const bootstrapStartedAt = performance.now();
   const rootEl = document.documentElement;
   rootEl.style.setProperty('--cron-shell-bg-image', `url(${JSON.stringify(shellBgUrl).slice(1, -1)})`);
   rootEl.style.setProperty('--cron-logo-url', `url(${JSON.stringify(logoUrl).slice(1, -1)})`);
+  rootEl.style.setProperty('--cron-logo-video-url', `url(${JSON.stringify(logoVideoUrl).slice(1, -1)})`);
   // Post-restart instances (relaunched by dev.mjs) carry restartHandoff in the
   // runtime marker; the renderer keeps the Restarting overlay visible from
   // first paint until the app is ready.
@@ -56,12 +63,21 @@ async function bootstrap() {
     .then((diag) => !!diag.restartHandoff)
     .catch(() => false);
   const hostAdapter = createStandaloneHostAdapter({
-    selectFolder: () => window.cronHost.selectFolder(),
+    // The CRON folder browser modal settles this promise with the picked folder
+    // (or null on cancel) via `settleFolderSelection`.
+    selectFolder: () => awaitFolderSelection(),
     hostActionBridge: {
       perform: performProjectAction,
       restart: restartApp,
     },
   });
+
+  // CRON-styled folder browser bridge: main-process directory listing plus
+  // path validation for the final selection (replaces the raw OS dialog).
+  const folderPicker: FolderPickerBridge = {
+    list: (dir) => window.cronHost.fs.list(dir),
+    confirm: (dir) => window.cronHost.selectFolder(dir),
+  };
 
   const dataService = createIpcDataService({ storagePath: '' });
 
@@ -75,6 +91,7 @@ async function bootstrap() {
           llm: createIpcLlmClient(),
           openCodeRunner: createIpcOpenCodeRunnerClient(),
           tray: createIpcTrayClient(),
+          folderPicker,
           startupRestartHandoff,
           onUsable: () => {
             void window.cronHost.diag.usable().catch(() => undefined);
@@ -107,11 +124,15 @@ async function bootstrap() {
   const rootEl2 = document.getElementById('root');
   if (rootEl2) rootEl2.style.display = 'block';
   // Delay splash removal by one microtask so the overlay spinner is definitely
-  // in the layout before the browser paints the next frame.
+  // in the layout before the browser paints the next frame, and enforce the
+  // ~3s minimum display (max(3000ms, ready)) on both launch and restart. On a
+  // restart-handoff relaunch the RestartOverlay (z-index 1000) covers the
+  // splash seamlessly and enforces its own 3s floor.
+  const splashHoldMs = Math.max(0, 3000 - Math.round(performance.now() - bootstrapStartedAt));
   setTimeout(() => {
     const splashEl = document.getElementById('splash');
     if (splashEl) splashEl.style.display = 'none';
-  }, 0);
+  }, splashHoldMs);
 }
 
 bootstrap().catch(() => {

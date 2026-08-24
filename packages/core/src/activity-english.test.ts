@@ -99,7 +99,7 @@ describe('plain-English activity mapping', () => {
 
   it('maps model ids to friendly executor labels in the normal surface', () => {
     expect(friendlyModelName('deepseek/deepseek-v4-flash')).toBe('DeepSeek V4 Flash');
-    expect(friendlyModelName('deepseek/deepseek-v4-pro')).toBe('DeepSeek V4 Pro (escalation)');
+    expect(friendlyModelName('deepseek/deepseek-v4-pro')).toBe('DeepSeek V4 Pro (deeper reasoning)');
     expect(friendlyModelName('')).toBe('Coding agent');
   });
 

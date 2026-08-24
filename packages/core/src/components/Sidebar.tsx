@@ -431,12 +431,13 @@ const collapsedProjectButtonStyle = (active: boolean): CSSProperties => ({
 
 /** Fixed lower stack (current project, agent state, settings/account). Kept
  *  out of the scrolling projects region; never overlaps the taskbar because the
- *  projects list above it absorbs all remaining flex space. */
+ *  projects list above it absorbs all remaining flex space. `min-height` is
+ *  left at its auto default so the stack always keeps its full natural height
+ *  (the projects list is the only shrinkable/scrollable region above it). */
 const lowerStackStyle: CSSProperties = {
   flexShrink: 0,
   display: 'flex',
   flexDirection: 'column',
-  minHeight: 0,
   overflow: 'hidden',
 };
 

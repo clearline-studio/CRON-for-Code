@@ -9,7 +9,13 @@ function subscribeToTrayEvent(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('cronHost', {
-  selectFolder: () => ipcRenderer.invoke('cron:select-folder'),
+  // No path arg -> legacy fallback (native dialog); a path arg is the CRON
+  // folder browser confirming a selection for validation.
+  selectFolder: (dir) => ipcRenderer.invoke('cron:select-folder', dir),
+
+  fs: {
+    list: (dir) => ipcRenderer.invoke('cron:fs:list', dir),
+  },
 
   db: {
     loadAll: () => ipcRenderer.invoke('cron:db:load-all'),
@@ -75,10 +81,10 @@ contextBridge.exposeInMainWorld('cronHost', {
     usable: () => ipcRenderer.invoke('cron:diag:usable'),
   },
 
-  lmStudio: {
-    getConfig: () => ipcRenderer.invoke('cron:lmstudio:get-config'),
-    saveConfig: (config) => ipcRenderer.invoke('cron:lmstudio:save-config', config),
-    test: (config) => ipcRenderer.invoke('cron:lmstudio:test', config),
-    chat: (input) => ipcRenderer.invoke('cron:lmstudio:chat', input),
+  model: {
+    getConfig: () => ipcRenderer.invoke('cron:model:get-config'),
+    saveConfig: (config) => ipcRenderer.invoke('cron:model:save-config', config),
+    test: (config) => ipcRenderer.invoke('cron:model:test', config),
+    chat: (input) => ipcRenderer.invoke('cron:model:chat', input),
   },
 });

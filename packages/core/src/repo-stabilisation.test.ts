@@ -6,8 +6,8 @@ import { resolve, dirname, join } from 'node:path';
 
 // Repo-stabilisation and dev-launcher focused tests.
 // These verify repository-level invariants (gitignore policy, lint baseline,
-// launcher files/behaviour) and that stabilisation did not regress the LM Studio
-// integration or dev/production userData separation.
+// launcher files/behaviour) and that stabilisation did not regress the
+// cloud-first model routing, Ollama fallback, or dev/production userData separation.
 
 function findRepoRoot(start: string): string {
   let dir = start;
@@ -111,23 +111,55 @@ describe('repository stabilisation', () => {
   });
 });
 
-describe('LM Studio integration preserved', () => {
-  it('LM Studio IPC handlers remain present in the Electron main process', () => {
+describe('model provider routing preserved (cloud-first, Ollama fallback)', () => {
+  it('model provider IPC handlers remain present in the Electron main process', () => {
     const main = readRepoFile('apps/standalone/electron/main.mjs');
     for (const channel of [
-      'cron:lmstudio:get-config',
-      'cron:lmstudio:save-config',
-      'cron:lmstudio:test',
-      'cron:lmstudio:chat',
+      'cron:model:get-config',
+      'cron:model:save-config',
+      'cron:model:test',
+      'cron:model:chat',
     ]) {
       expect(main).toContain(channel);
     }
   });
-  it('LlmConfig shape remains intact', () => {
+  it('LlmConfig shape is cloud + Ollama (no legacy textModel/baseUrl-only shape)', () => {
     const llm = readRepoFile('packages/core/src/llm.ts');
-    expect(llm).toContain('baseUrl');
-    expect(llm).toContain('textModel');
-    expect(llm).toContain('visionModel');
+    expect(llm).toContain('cloud');
+    expect(llm).toContain('ollama');
+    expect(llm).toContain('codingModel');
+    expect(llm).not.toContain('textModel');
+  });
+
+  it('Ollama is the local fallback (port 11434), not a legacy :1234 endpoint', () => {
+    const main = readRepoFile('apps/standalone/electron/main.mjs');
+    expect(main).toContain('11434');
+    expect(main).not.toMatch(/:1234/);
+    const chatRuntime = readRepoFile('packages/core/src/chat-runtime.ts');
+    expect(chatRuntime).toContain('11434');
+    expect(chatRuntime).not.toMatch(/:1234/);
+  });
+
+  it('no visible LM Studio wording remains in active product source', () => {
+    const activeSourceFiles = [
+      'apps/standalone/electron/main.mjs',
+      'apps/standalone/electron/preload.cjs',
+      'apps/standalone/electron/register-ipc.mjs',
+      'apps/standalone/electron/tray-template.mjs',
+      'apps/standalone/src/ipc-data-service.ts',
+      'apps/standalone/src/main.tsx',
+      'packages/core/src/chat-runtime.ts',
+      'packages/core/src/llm.ts',
+      'packages/core/src/activity-english.ts',
+      'packages/core/src/opencode-client.ts',
+      'packages/core/src/components/CronAssistant.tsx',
+      'packages/core/src/components/ModelSettings.tsx',
+      'packages/core/src/components/Layout.tsx',
+      'packages/core/src/index.ts',
+    ];
+    const forbidden = /LM Studio|lmstudio|lmStudio/i;
+    const offenders = activeSourceFiles.filter((file) => forbidden.test(readRepoFile(file)));
+    expect(offenders).toEqual([]);
   });
 
   it('dev and production userData remain separated', () => {
@@ -230,8 +262,10 @@ describe('main-process IPC registration repair', () => {
     expect(main).toMatch(/if \(IS_DEV\)[\s\S]{0,200}writeDevRestartIntent/);
     expect(main).toMatch(/setImmediate\(\(\) => \{[\s\S]{0,80}app\.relaunch\(\)/);
     // Electron cannot spawn a surviving relauncher (kill-on-close job): the
-    // restart handler must never spawn the launcher or powershell.
-    expect(main).not.toContain('spawn(');
+    // restart handler must never spawn the launcher or powershell. main.mjs is
+    // still allowed to spawn the dev-mode Vite server at startup (self-starting
+    // --dev launch), so this check is scoped to the restart handler region.
+    expect(main).not.toMatch(/performAppRestart[\s\S]{0,3000}spawn\(/);
     expect(main).not.toContain("'powershell.exe'");
     expect(main).not.toContain('run-code-dev-hidden.ps1');
     // The intent write failure must NOT quit silently (visible bounded error).
@@ -344,11 +378,11 @@ describe('main-process IPC registration repair', () => {
     expect(readySection).toContain('runtimeMarkerState.restartHandoff');
   });
 
-  it('CRON Online is a non-clickable status and unfinished features are truthfully DEV marked', () => {
-    const header = readRepoFile('packages/core/src/components/CronHeader.tsx');
-    expect(header).toContain('role="status"');
-    expect(header).toContain('data-testid="cron-online-status"');
-    expect(header).not.toMatch(/statusBtnStyle[\s\S]{0,300}onClick/);
+  it('CRON Online is a non-clickable status and the restart button is wired into the top bar', () => {
+    const layout = readRepoFile('packages/core/src/components/Layout.tsx');
+    expect(layout).toContain('data-testid="cron-online-status"');
+    expect(layout).toContain('data-testid="cron-restart-button"');
+    expect(layout).toContain('restartApp()');
     const footer = readRepoFile('packages/core/src/components/CronFooter.tsx');
     expect(footer).toContain('placeholderTabs');
     expect(footer).toContain('PowerShell');
@@ -357,17 +391,22 @@ describe('main-process IPC registration repair', () => {
     expect(sidebar).toContain('>DEV<');
   });
 
-  it('the native folder picker is wrapped in a CRON-styled modal flow', () => {
+  it('the folder picker is a CRON-styled in-app browser (no raw OS dialog in the happy path)', () => {
     const app = readRepoFile('packages/core/src/components/App.tsx');
     expect(app).toContain('setPickerActive(true)');
     expect(app).toContain('setPickerActive(false)');
     const layout = readRepoFile('packages/core/src/components/Layout.tsx');
-    expect(layout).toContain('<PickerModal />');
+    expect(layout).toContain('<PickerModal');
     const modal = readRepoFile('packages/core/src/components/PickerModal.tsx');
     expect(modal).toContain('PROJECT PICKER');
     expect(modal).toContain('data-testid="picker-modal"');
+    expect(modal).toContain('Select this folder');
     const index = readRepoFile('packages/core/src/index.ts');
     expect(index).toContain("export { PickerModal } from './components/PickerModal.js';");
+    const main = readRepoFile('apps/standalone/electron/main.mjs');
+    expect(main).toContain("'cron:fs:list'");
+    const preload = readRepoFile('apps/standalone/electron/preload.cjs');
+    expect(preload).toContain("'cron:fs:list'");
   });
 
   it('the assistant Model control is wired to open the model configuration', () => {

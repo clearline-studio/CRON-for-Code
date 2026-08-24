@@ -36,9 +36,9 @@ if (-not (Test-Path -LiteralPath $iconPath)) {
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $electronExe
-$shortcut.Arguments = '.'
+$shortcut.Arguments = '. --dev'
 $shortcut.WorkingDirectory = $standaloneDir
-$shortcut.Description = 'CRON for Code - development app (normal mode)'
+$shortcut.Description = 'CRON for Code - development app (dev mode, self-starting)'
 if ($iconPath) {
     $shortcut.IconLocation = "$iconPath,0"
 }
@@ -48,7 +48,7 @@ else {
 $shortcut.Save()
 
 Write-Output "Created shortcut: $shortcutPath"
-Write-Output "Target: $electronExe ."
+Write-Output "Target: $electronExe . --dev"
 Write-Output "Working directory: $standaloneDir"
 if ($iconPath) {
     Write-Output "Icon: $iconPath"

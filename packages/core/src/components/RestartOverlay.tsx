@@ -14,11 +14,16 @@ import { useWorkspaceStore } from '../context.js';
 // instead of snapping away - a sudden unmount reads as a "flash screen" right
 // before the app opens. Visibility hides it (and removes it from hit-testing
 // and the accessibility tree) only AFTER the fade completes.
+// The ~3s minimum hold is enforced by App (RESTART_LINGER_MIN_MS) on the
+// relaunch/handoff path, so the overlay itself just mirrors `show` and fades.
 const FADE_MS = 400;
 
 export function RestartOverlay({ preparing = false }: { preparing?: boolean }) {
   const isRestarting = useWorkspaceStore((s) => s.isRestarting);
   const show = isRestarting || preparing;
+  // Latches whether the overlay was showing on mount, so a relaunch that starts
+  // in the handoff state keeps the overlay mounted (hidden) for its fade-out,
+  // while a normal launch renders nothing at all.
   const [everShown] = useState(show);
   if (!everShown && !show) return null;
   const hidden = !show;
@@ -113,7 +118,7 @@ const spinnerCssStyle: CSSProperties = {
 const titleStyle: CSSProperties = {
   fontSize: 24,
   fontWeight: 300,
-  color: '#eaf2ff',
+  color: '#f5f9ff',
   letterSpacing: 0.5,
 };
 

@@ -149,7 +149,7 @@ export function CronAssistant({ dataService, llm, openCodeRunner, config, sessio
     }
 
     if (!llm || !config) {
-      setMessages((current) => [...current, createChatMessage({ role: 'cron', text: 'Connect LM Studio from Settings before starting a conversation.', route: selectedStatus.route })]);
+      setMessages((current) => [...current, createChatMessage({ role: 'cron', text: 'Connect a model provider from Settings before starting a conversation.', route: selectedStatus.route })]);
       return;
     }
 
@@ -166,7 +166,7 @@ export function CronAssistant({ dataService, llm, openCodeRunner, config, sessio
       });
       setMessages((current) => [...current, createChatMessage({ role: 'cron', text: result.text, route: selectedStatus.route })]);
     } catch (error) {
-      setMessages((current) => [...current, createChatMessage({ role: 'cron', text: error instanceof Error ? error.message : 'CC could not reach LM Studio.', route: selectedStatus.route })]);
+      setMessages((current) => [...current, createChatMessage({ role: 'cron', text: error instanceof Error ? error.message : 'CRON could not reach a model provider.', route: selectedStatus.route })]);
     } finally {
       setBusy(false);
     }
@@ -196,7 +196,7 @@ export function CronAssistant({ dataService, llm, openCodeRunner, config, sessio
 
   async function handleRunHandoff(taskId: string, contextMessages = compactContext(messages)) {
     if (runningTaskId) return;
-    const model = config?.codingModel || DEFAULT_LLM_CONFIG.codingModel;
+    const model = config?.cloud.codingModel || DEFAULT_LLM_CONFIG.cloud.codingModel;
     if (!openCodeRunner) {
       setRunnerErrors((current) => ({ ...current, [taskId]: 'OpenCode runner is not connected in this host.' }));
       return;
@@ -269,7 +269,7 @@ export function CronAssistant({ dataService, llm, openCodeRunner, config, sessio
     <section style={workspaceStyle} data-testid="chat-panel">
       <header style={conversationHeaderStyle}>
         <div>
-          <strong>Planner — Gemma</strong>
+          <strong>Planner</strong>
           <span style={mutedStyle}>{routeStatus.detail}</span>
         </div>
         <div style={headerRightStyle}>
@@ -311,7 +311,7 @@ export function CronAssistant({ dataService, llm, openCodeRunner, config, sessio
                 error={runnerErrors[message.handoffTaskId]}
                 running={runningTaskId === message.handoffTaskId}
                 disabled={runningTaskId !== null}
-                model={config?.codingModel || DEFAULT_LLM_CONFIG.codingModel}
+                model={config?.cloud.codingModel || DEFAULT_LLM_CONFIG.cloud.codingModel}
                 onRun={() => void handleRunHandoff(message.handoffTaskId!)}
                 onApprove={(approvalId) => void handleApproveHandoff(message.handoffTaskId!, approvalId)}
                 onReject={(approvalId) => void handleRejectHandoff(message.handoffTaskId!, approvalId)}

@@ -1,12 +1,13 @@
 ﻿import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import type { ReactNode } from 'react';
-import { render, screen, cleanup, waitFor, act, within } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, act, within, fireEvent } from '@testing-library/react';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createWorkspaceStore, visibleProjects, reconcileProjects } from './store.js';
 import { WorkspaceProvider } from './context.js';
 import { Sidebar } from './components/Sidebar.js';
+import { Layout } from './components/Layout.js';
 import { ErrorBanner } from './components/ErrorBanner.js';
 import { createJsonDataService } from '@cron-code/data-service';
 import { createStandaloneHostAdapter } from '@cron-code/host-adapter';
@@ -97,6 +98,34 @@ describe('CRON Restart', () => {
     });
     await waitFor(() => expect(store.getState().isRestarting).toBe(true));
     expect(restart).toHaveBeenCalledTimes(1);
+
+    await dataService.destroy();
+  });
+
+  it('renders the restart button in the top bar and wires it to restartApp', async () => {
+    const dataService = createJsonDataService({ storagePath: join(tmpdir(), 'cron-restart-btn-' + Date.now()) });
+    const restart = vi.fn().mockResolvedValue(undefined);
+    const hostAdapter = createStandaloneHostAdapter({
+      selectFolder: vi.fn().mockResolvedValue(null),
+      hostActionBridge: { perform: vi.fn().mockResolvedValue({ status: 'ok' }), restart },
+    });
+    const store = createWorkspaceStore({ dataService, hostAdapter });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <WorkspaceProvider store={store}>{children}</WorkspaceProvider>
+    );
+
+    await act(async () => {
+      render(<Layout onSelectProject={() => undefined} />, { wrapper });
+    });
+
+    const button = screen.getByTestId('cron-restart-button') as HTMLButtonElement;
+    expect(button).toBeTruthy();
+    expect(button.disabled).toBe(false);
+
+    fireEvent.click(button);
+    await waitFor(() => expect(restart).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(store.getState().isRestarting).toBe(true));
+    expect((screen.getByTestId('cron-restart-button') as HTMLButtonElement).disabled).toBe(true);
 
     await dataService.destroy();
   });
@@ -319,6 +348,12 @@ describe('Sidebar clipping + lower-stack visibility', () => {
     const accountRow = within(lowerStack).getByText('Account');
     expect(accountRow).toBeTruthy();
     expect(lowerStack.style.flexShrink).toBe('0');
+    // The lower stack must keep its full natural height (never shrink/clip); the
+    // projects list above it is the only shrinkable+scrollable region.
+    expect(lowerStack.style.minHeight).not.toBe('0px');
+    const projects = screen.getByTestId('sidebar-projects');
+    expect(projects.style.overflow).toBe('auto');
+    expect(projects.style.minHeight).toBe('0px');
     const devBadges = within(lowerStack).getAllByText('DEV');
     expect(devBadges.length).toBeGreaterThan(0);
   });

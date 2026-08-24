@@ -23,6 +23,13 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Gem working memory (personal — never ship)
+unrecon_memory.md
+
+# Backups (never ship)
+*.bak
+*.bak-*
+
 # Credentials
 *.pem
 *.key

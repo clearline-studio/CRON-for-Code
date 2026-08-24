@@ -1,5 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, dialog, clipboard, shell } from 'electron';
 import path from 'node:path';
+import os from 'node:os';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -22,6 +24,7 @@ import {
 } from '@cron-code/data-service';
 import { REQUIRED_IPC_CHANNELS, createIpcRegistrar } from './register-ipc.mjs';
 import { resolveRelinkOutcome } from './relink-flow.mjs';
+import { buildTrayMenuTemplate } from './tray-template.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -45,12 +48,20 @@ const PRELOAD_PATH = path.join(__dirname, 'preload.cjs');
 const RENDERER_ENTRY = path.join(projectRoot, 'dist-renderer', 'index.html');
 const DEV_URL = process.env.CRON_CODE_DEV_URL || 'http://127.0.0.1:5190';
 const ICON_PATH = path.join(projectRoot, 'branding', 'assets', 'code_icon.ico');
-const DEFAULT_LM_STUDIO_CONFIG = {
-  baseUrl: 'http://127.0.0.1:1234/v1',
-  textModel: 'gemma-4-26b-a4b-qat',
-  visionModel: 'gemma-4-26b-a4b-qat',
-  codingModel: 'deepseek/deepseek-v4-flash',
-  escalationModel: 'deepseek/deepseek-v4-pro',
+const DEFAULT_MODEL_CONFIG = {
+  cloud: {
+    baseUrl: 'https://api.openrouter.ai/api/v1',
+    apiKey: '',
+    chatModel: 'deepseek/deepseek-v4-flash',
+    visionModel: 'qwen/qwen-2-vl-7b-instruct',
+    codingModel: 'deepseek/deepseek-v4-flash',
+    escalationModel: 'deepseek/deepseek-v4-pro',
+  },
+  ollama: {
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    chatModel: 'llama3.1',
+    visionModel: 'llava',
+  },
 };
 
 const WINDOW_STATE_PATH = path.join(app.getPath('userData'), 'window-state.json');
@@ -66,6 +77,99 @@ let openCodeRunner = null;
 let projectManagement = null;
 let isQuitting = false;
 let isRestarting = false;
+
+// --- Dev-mode self-starting Vite (direct `electron.exe . --dev` launch) ---
+//
+// The taskbar shortcut targets electron.exe directly (single taskbar identity)
+// and passes --dev. A bare direct launch would load a dead dev URL when Vite is
+// not already running, so in dev mode we probe DEV_URL and, if unreachable,
+// spawn the SAME Vite command dev.mjs uses and poll until it serves. We only
+// ever kill a Vite WE spawned here (any other Vite is owned by dev.mjs).
+
+let selfStartedViteProcess = null;
+
+function devUrlPort() {
+  try {
+    return Number(new URL(DEV_URL).port) || 5190;
+  } catch {
+    return 5190;
+  }
+}
+
+async function isDevUrlReachable(timeoutMs = 1500) {
+  try {
+    await fetch(DEV_URL, { signal: AbortSignal.timeout(timeoutMs) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function spawnSelfVite() {
+  const port = devUrlPort();
+  const viteLogPath = path.join(DEV_RUNTIME_DIR, 'code-dev-vite-direct.log');
+  let stdio;
+  try {
+    if (!fs.existsSync(DEV_RUNTIME_DIR)) {
+      fs.mkdirSync(DEV_RUNTIME_DIR, { recursive: true });
+    }
+    const fd = fs.openSync(viteLogPath, 'a');
+    stdio = ['ignore', fd, fd];
+  } catch {
+    stdio = 'inherit';
+  }
+  logger.info(`Dev server unreachable at ${DEV_URL}; self-starting Vite on port ${port} (log: ${viteLogPath})`);
+  selfStartedViteProcess = spawn('pnpm', ['exec', 'vite', '--port', String(port)], {
+    cwd: projectRoot,
+    shell: true,
+    windowsHide: true,
+    stdio,
+    env: { ...process.env, CRON_DEV: '1' },
+  });
+}
+
+async function ensureDevServerReachable() {
+  if (!IS_DEV) return;
+  if (await isDevUrlReachable()) {
+    logger.info(`Dev server already reachable at ${DEV_URL}; not spawning a second Vite`);
+    return;
+  }
+  try {
+    spawnSelfVite();
+  } catch (err) {
+    logger.error('Could not self-start Vite dev server', { error: String(err) });
+    return;
+  }
+  const startedAt = Date.now();
+  const deadline = startedAt + 30000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (await isDevUrlReachable()) {
+      logger.info(`Dev server became reachable at ${DEV_URL} after ${Date.now() - startedAt}ms`);
+      return;
+    }
+  }
+  logger.error(
+    `Dev server did not become reachable at ${DEV_URL} within 30s; proceeding to loadURL anyway (startup diagnostics will surface the failure)`,
+  );
+}
+
+// Kill ONLY the Vite this instance spawned. Idempotent: selfStartedViteProcess
+// is cleared on first run, so the shutdown-time app.quit() re-entry is a no-op.
+app.on('before-quit', () => {
+  if (!selfStartedViteProcess) return;
+  const pid = selfStartedViteProcess.pid;
+  selfStartedViteProcess = null;
+  if (!pid) return;
+  logger.info(`Stopping self-started Vite dev server (pid ${pid})`);
+  try {
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      process.kill(pid, 'SIGTERM');
+    }
+  } catch { /* best effort */ }
+});
 
 // --- Dev runtime version/identity marker (dev-only, narrow diagnostics) ---
 
@@ -178,6 +282,25 @@ async function performAppRestart() {
   }
   const pm = await ensureProjectManagement();
   await pm.recordAudit({ eventType: 'app.restart_requested' });
+  // Direct `electron.exe . --dev` launch (no dev.mjs supervisor, i.e. CRON_DEV
+  // env not set): there is no parent to read the restart intent, so fall back to
+  // app.relaunch(). This is safe here — the relaunched instance carries the same
+  // --dev argv and self-starts Vite, and this instance's before-quit handler
+  // kills the Vite it spawned. Supervised dev (CRON_DEV=1 from dev.mjs) keeps
+  // the intent + supervisor flow below; production keeps app.relaunch().
+  const isDirectDevLaunch = IS_DEV && process.env.CRON_DEV !== '1';
+  if (isDirectDevLaunch) {
+    setImmediate(() => {
+      try {
+        app.relaunch();
+        app.quit();
+      } catch (err) {
+        logger.error('Restart failed', { error: String(err) });
+        isRestarting = false;
+      }
+    });
+    return { accepted: true };
+  }
   if (IS_DEV) {
     // The intent write must succeed: if it cannot, do NOT quit (a quit without
     // an intent would silently leave the app closed).
@@ -282,8 +405,8 @@ async function ensureOpenCodeRunner() {
   const ds = await ensureDataService();
   openCodeRunner = new OpenCodeRunner({
     dataService: ds,
-    defaultModel: DEFAULT_LM_STUDIO_CONFIG.codingModel,
-    escalationModel: DEFAULT_LM_STUDIO_CONFIG.escalationModel,
+    defaultModel: DEFAULT_MODEL_CONFIG.cloud.codingModel,
+    escalationModel: DEFAULT_MODEL_CONFIG.cloud.escalationModel,
     onEvent: (event) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('cron:opencode:event', event);
@@ -481,51 +604,38 @@ function createTray() {
   tray = new Tray(ICON_PATH);
   tray.setToolTip('CRON for Code');
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Open CC',
-      click: () => {
+  // Windows renders native tray menus (OS-styled; no custom CSS is possible),
+  // so the CRON treatment is a clear, correct item list from the pure template.
+  const contextMenu = Menu.buildFromTemplate(
+    buildTrayMenuTemplate({
+      openApp: () => {
         if (mainWindow) {
           mainWindow.show();
           mainWindow.focus();
         }
       },
-    },
-    {
-      label: 'Show active tasks',
-      click: () => {
+      showTasks: () => {
         if (mainWindow) {
           mainWindow.show();
           mainWindow.focus();
           mainWindow.webContents.send('cron:tray:show-tasks');
         }
       },
-    },
-    { type: 'separator' },
-    {
-      label: 'Pause current task',
-      click: () => {
+      pauseTask: () => {
         if (mainWindow) {
           mainWindow.webContents.send('cron:tray:pause-task');
         }
       },
-    },
-    {
-      label: 'Stop current task',
-      click: () => {
+      stopTask: () => {
         if (mainWindow) {
           mainWindow.webContents.send('cron:tray:stop-task');
         }
       },
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit CC',
-      click: () => {
+      quit: () => {
         app.quit();
       },
-    },
-  ]);
+    }),
+  );
 
   tray.setContextMenu(contextMenu);
 
@@ -567,7 +677,7 @@ function registerHandler(channel, handler) {
 function registerCronIpcHandlers() {
   ipcRegistrator.begin();
 
-  registerHandler('cron:select-folder', async () => {
+  registerHandler('cron:select-folder', async (requestedPath) => {
     if (!mainWindow) return null;
     if (IS_DEV && process.env.CRON_CODE_DEV_PICKER_NO_DIALOG === '1') {
       // Dev-only diagnostic: prove the CRON-styled picker flow live without
@@ -576,12 +686,62 @@ function registerCronIpcHandlers() {
       logger.info('Dev picker diagnostic: folder dialog bypassed, returning null');
       return null;
     }
+    // The CRON folder browser sends a chosen path for validation. The raw OS
+    // dialog below is only a backward-compatible fallback when no path arrives.
+    if (typeof requestedPath === 'string' && requestedPath.trim() !== '') {
+      const target = path.resolve(requestedPath.trim());
+      let stat;
+      try {
+        stat = fs.statSync(target);
+      } catch (err) {
+        throw new Error(`Folder is not accessible: ${target} (${err.message})`, { cause: err });
+      }
+      if (!stat.isDirectory()) {
+        throw new Error(`Selected path is not a folder: ${target}`);
+      }
+      return target;
+    }
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
       title: 'Select Project Folder',
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     return path.resolve(result.filePaths[0]);
+  });
+
+  // Directory listing for the CRON-styled folder browser. Returns folder + file
+  // entries for the resolved path (empty string = the host home folder), with a
+  // parent pointer (null at a filesystem root) for Up/breadcrumb navigation.
+  registerHandler('cron:fs:list', async (dirPath) => {
+    const requested = typeof dirPath === 'string' && dirPath.trim() !== '' ? dirPath.trim() : os.homedir();
+    const target = path.resolve(requested);
+    let stat;
+    try {
+      stat = fs.statSync(target);
+    } catch (err) {
+      throw new Error(`Folder is not accessible: ${target} (${err.message})`, { cause: err });
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(`Not a folder: ${target}`);
+    }
+    let dirents;
+    try {
+      dirents = fs.readdirSync(target, { withFileTypes: true });
+    } catch (err) {
+      throw new Error(`Cannot read folder: ${target} (${err.message})`, { cause: err });
+    }
+    const entries = dirents
+      .map((dirent) => ({
+        name: dirent.name,
+        path: path.join(target, dirent.name),
+        isDirectory: dirent.isDirectory(),
+      }))
+      .sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        return a.name.localeCompare(b.name, undefined, { numeric: true });
+      });
+    const parent = path.dirname(target) === target ? null : path.dirname(target);
+    return { path: target, parent, entries };
   });
 
   // --- Persistence IPC ---
@@ -682,7 +842,7 @@ function registerCronIpcHandlers() {
     const runner = await ensureOpenCodeRunner();
     return runner.runTask({
       taskId: String(input?.taskId || ''),
-      model: typeof input?.model === 'string' ? input.model : DEFAULT_LM_STUDIO_CONFIG.codingModel,
+      model: typeof input?.model === 'string' ? input.model : DEFAULT_MODEL_CONFIG.cloud.codingModel,
       conversationContext: Array.isArray(input?.conversationContext) ? input.conversationContext : [],
     });
   });
@@ -1159,7 +1319,7 @@ function registerCronIpcHandlers() {
       runJs(
         'model-settings-opened',
         `(() => {
-           const settings = [...document.querySelectorAll('div')].some((d) => (d.textContent || '').includes('LM Studio'));
+            const settings = [...document.querySelectorAll('div')].some((d) => (d.textContent || '').includes('Cloud AI'));
            return { settingsDialogVisible: settings };
          })()`,
         15800,
@@ -1209,56 +1369,118 @@ function registerCronIpcHandlers() {
     return { ok: true };
   });
 
-  // --- LM Studio IPC ---
+  // --- Model provider IPC (cloud-first, Ollama local fallback) ---
 
-  function cleanLlmConfig(config = {}) {
-    const baseUrl = String(config.baseUrl || DEFAULT_LM_STUDIO_CONFIG.baseUrl).trim().replace(/\/+$/, '');
-    const parsed = new URL(baseUrl);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new Error('LM Studio URL must start with http:// or https://');
+  const MODEL_CONFIG_KEY = 'model.config';
+
+  function cleanUrl(value, fallback) {
+    return String(value || fallback).trim().replace(/\/+$/, '');
+  }
+
+  function cleanModelConfig(config = {}) {
+    const cloud = config.cloud ?? {};
+    const ollama = config.ollama ?? {};
+    const cloudBaseUrl = cleanUrl(cloud.baseUrl, DEFAULT_MODEL_CONFIG.cloud.baseUrl);
+    const ollamaBaseUrl = cleanUrl(ollama.baseUrl, DEFAULT_MODEL_CONFIG.ollama.baseUrl);
+    const cloudParsed = new URL(cloudBaseUrl);
+    if (!['http:', 'https:'].includes(cloudParsed.protocol)) {
+      throw new Error('Cloud AI address must start with http:// or https://');
+    }
+    const ollamaParsed = new URL(ollamaBaseUrl);
+    if (!['http:', 'https:'].includes(ollamaParsed.protocol)) {
+      throw new Error('Local AI (Ollama) address must start with http:// or https://');
     }
     return {
-      baseUrl,
-      textModel: String(config.textModel || DEFAULT_LM_STUDIO_CONFIG.textModel).trim(),
-      visionModel: String(config.visionModel || DEFAULT_LM_STUDIO_CONFIG.visionModel).trim(),
-      codingModel: String(config.codingModel || DEFAULT_LM_STUDIO_CONFIG.codingModel).trim(),
-      escalationModel: String(config.escalationModel || DEFAULT_LM_STUDIO_CONFIG.escalationModel).trim(),
+      cloud: {
+        baseUrl: cloudBaseUrl,
+        apiKey: String(cloud.apiKey || '').trim(),
+        chatModel: String(cloud.chatModel || DEFAULT_MODEL_CONFIG.cloud.chatModel).trim(),
+        visionModel: String(cloud.visionModel || DEFAULT_MODEL_CONFIG.cloud.visionModel).trim(),
+        codingModel: String(cloud.codingModel || DEFAULT_MODEL_CONFIG.cloud.codingModel).trim(),
+        escalationModel: String(cloud.escalationModel || DEFAULT_MODEL_CONFIG.cloud.escalationModel).trim(),
+      },
+      ollama: {
+        baseUrl: ollamaBaseUrl,
+        chatModel: String(ollama.chatModel || DEFAULT_MODEL_CONFIG.ollama.chatModel).trim(),
+        visionModel: String(ollama.visionModel || DEFAULT_MODEL_CONFIG.ollama.visionModel).trim(),
+      },
     };
   }
 
-  async function lmStudioRequest(config, endpoint, options = {}) {
-    const response = await fetch(`${config.baseUrl}${endpoint}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    });
+  async function modelChatRequest(baseUrl, apiKey, endpoint, options = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    // The key is sent to the provider endpoint only; it is never logged or
+    // returned to the renderer.
+    if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+    const response = await fetch(`${baseUrl}${endpoint}`, { ...options, headers });
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new Error(`LM Studio returned ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`);
+      throw new Error(`Provider returned ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`);
     }
     return response.json();
   }
 
-  registerHandler('cron:lmstudio:get-config', async () => {
+  registerHandler('cron:model:get-config', async () => {
     const ds = await ensureDataService();
-    const saved = await ds.preferences.get('lmstudio.config');
+    const saved = await ds.preferences.get(MODEL_CONFIG_KEY);
     try {
-      return cleanLlmConfig(saved ? JSON.parse(saved) : DEFAULT_LM_STUDIO_CONFIG);
+      return cleanModelConfig(saved ? JSON.parse(saved) : DEFAULT_MODEL_CONFIG);
     } catch {
-      return DEFAULT_LM_STUDIO_CONFIG;
+      return DEFAULT_MODEL_CONFIG;
     }
   });
 
-  registerHandler('cron:lmstudio:save-config', async (config) => {
+  registerHandler('cron:model:save-config', async (config) => {
     const ds = await ensureDataService();
-    const clean = cleanLlmConfig(config);
-    await ds.preferences.set('lmstudio.config', JSON.stringify(clean));
+    const clean = cleanModelConfig(config);
+    await ds.preferences.set(MODEL_CONFIG_KEY, JSON.stringify(clean));
   });
 
-  registerHandler('cron:lmstudio:test', async (config) => {
-    const clean = cleanLlmConfig(config);
-    const data = await lmStudioRequest(clean, '/models');
-    const models = Array.isArray(data?.data) ? data.data.map((model) => String(model.id)).filter(Boolean) : [];
-    return { ok: true, models, message: `Connected. ${models.length} model${models.length === 1 ? '' : 's'} available.` };
+  registerHandler('cron:model:test', async (config) => {
+    const clean = cleanModelConfig(config);
+    const warnings = [];
+    const models = [];
+
+    let cloudOk;
+    try {
+      const data = await modelChatRequest(clean.cloud.baseUrl, clean.cloud.apiKey, '/models');
+      const list = Array.isArray(data?.data) ? data.data.map((m) => String(m.id)).filter(Boolean) : [];
+      models.push(...list);
+      cloudOk = true;
+      for (const [label, model] of [
+        ['Chat', clean.cloud.chatModel],
+        ['Vision', clean.cloud.visionModel],
+        ['Coding', clean.cloud.codingModel],
+        ['Deeper reasoning', clean.cloud.escalationModel],
+      ]) {
+        if (model && !list.includes(model)) warnings.push(`Cloud ${label} model "${model}" not found`);
+      }
+    } catch {
+      cloudOk = false;
+    }
+
+    let ollamaOk;
+    try {
+      const data = await modelChatRequest(clean.ollama.baseUrl, '', '/models');
+      const list = Array.isArray(data?.data) ? data.data.map((m) => String(m.id)).filter(Boolean) : [];
+      models.push(...list);
+      ollamaOk = true;
+      for (const [label, model] of [
+        ['Local chat', clean.ollama.chatModel],
+        ['Local vision', clean.ollama.visionModel],
+      ]) {
+        if (model && !list.includes(model)) warnings.push(`Local ${label} model "${model}" not found`);
+      }
+    } catch {
+      ollamaOk = false;
+    }
+
+    const parts = [
+      cloudOk ? `Cloud AI: connected (${models.length ? `${models.length} model${models.length === 1 ? '' : 's'}` : '0 models'}).` : 'Cloud AI: unreachable.',
+      ollamaOk ? 'Local AI (Ollama): connected.' : 'Local AI (Ollama): unreachable.',
+    ];
+    const warnText = warnings.length > 0 ? `\n\nWarnings: ${warnings.join('; ')}. Update these in Settings.` : '';
+    return { ok: cloudOk || ollamaOk, models, message: `${parts.join(' ')}${warnText}` };
   });
 
   function buildLlmMessages({ message, attachments = [], contextMessages = [] }) {
@@ -1290,16 +1512,11 @@ function registerCronIpcHandlers() {
     return [...prior, { role: 'user', content }];
   }
 
-  registerHandler('cron:lmstudio:chat', async ({ config, model, message, attachments, contextMessages }) => {
-    const clean = cleanLlmConfig(config);
-    const selectedModel = String(model || clean.textModel).trim();
-    const prompt = String(message || '').trim();
-    if (!selectedModel || !prompt) throw new Error('A model and message are required.');
-    const messages = buildLlmMessages({ message: prompt, attachments, contextMessages });
-    const data = await lmStudioRequest(clean, '/chat/completions', {
+  async function modelChatCompletion(baseUrl, apiKey, model, messages) {
+    const data = await modelChatRequest(baseUrl, apiKey, '/chat/completions', {
       method: 'POST',
       body: JSON.stringify({
-        model: selectedModel,
+        model,
         messages,
         temperature: 0.2,
         stream: false,
@@ -1307,8 +1524,31 @@ function registerCronIpcHandlers() {
     });
     const content = data?.choices?.[0]?.message?.content;
     const text = Array.isArray(content) ? content.map((part) => part?.text || '').join('') : String(content || '');
-    if (!text) throw new Error('LM Studio returned an empty response.');
-    return { text };
+    if (!text) throw new Error('The model returned an empty response.');
+    return text;
+  }
+
+  registerHandler('cron:model:chat', async ({ config, model, message, attachments, contextMessages }) => {
+    const clean = cleanModelConfig(config);
+    const prompt = String(message || '').trim();
+    if (!prompt) throw new Error('A message is required.');
+    const messages = buildLlmMessages({ message: prompt, attachments, contextMessages });
+    const selectedModel = String(model || clean.cloud.chatModel).trim();
+    // Cloud first; if the cloud is unreachable, fall back to local Ollama.
+    let cloudError;
+    try {
+      const text = await modelChatCompletion(clean.cloud.baseUrl, clean.cloud.apiKey, selectedModel, messages);
+      return { text };
+    } catch (err) {
+      cloudError = err;
+    }
+    try {
+      const text = await modelChatCompletion(clean.ollama.baseUrl, '', clean.ollama.chatModel, messages);
+      return { text };
+    } catch (ollamaError) {
+      const cloudMessage = cloudError instanceof Error ? cloudError.message : String(cloudError);
+      throw new Error(`Cloud AI and local Ollama are both unavailable. Cloud error: ${cloudMessage}`, { cause: ollamaError });
+    }
   });
 
   const summary = ipcRegistrator.complete();
@@ -1343,8 +1583,11 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     logger.info(`[STARTUP] app ready at +${Date.now() - APP_STARTED_AT}ms`);
+    // Dev mode must be self-sufficient for a direct electron.exe --dev launch:
+    // self-start Vite when it isn't already running, then wait for it to serve.
+    await ensureDevServerReachable();
     try {
       registerCronIpcHandlers();
       logger.info(`[STARTUP] IPC registration complete at +${Date.now() - APP_STARTED_AT}ms`);

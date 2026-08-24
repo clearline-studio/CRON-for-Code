@@ -4064,7 +4064,7 @@ Return this complete report to the CRON Architect for review.
 
 ---
 
-## Audit + Fix Sweep � 2026-08-14 (CC/OpenCode, audit/fix)
+## Audit + Fix Sweep � 2026-08-14 (CC/OpenCode, audit/fix)
 
 Task: `CC_CODE_AUDIT_AND_FIX_PROMPT.md`. Full audit then safe fixes, verification, and this report. Branch `main`, HEAD `71eaf50` + 2 local commits ahead of origin, nothing staged, 19 files uncommitted at start.
 
@@ -4091,5 +4091,222 @@ Implementation (safe fixes only). No architectural changes made; two items flagg
 
 ### Log rule
 Both `PROJECT_LOG.md` and this log appended per the permanent rule.
+
+Return this complete report to the CRON Architect for review.
+
+---
+
+## CRON for Code UI Fixes #2-#5 - 2026-08-17 (CC/OpenCode, implementation)
+
+Task: `CC_CODE_UI_FIXES_PROMPT.md` (Session 17 follow-up). 4 targeted UI fixes. Branch `main`, nothing staged, no commits.
+
+### Stage call
+Implementation (UI fixes only). No architectural changes. No LM Studio defaults / chat handler touched (MIMO's Session 17 fix preserved). No preload/IPC-bridge architecture change (new narrow channel only). No new dependencies.
+
+### Fix #2 - Restart button wired into the live layout
+`CronHeader.tsx` was dead code (never rendered). Deleted. `Layout.tsx` top bar now has the CRON Restart icon button before the settings gear (`RefreshCw` / `Loader2` spinner while restarting, disabled + `aria-busy`, `data-testid="cron-restart-button"`), calling store `restartApp()`. CronHeader tests removed; restart-button render test added; repo-stabilisation source assertions moved to Layout.
+
+### Fix #3 - CRON-styled folder browser replaces the raw OS dialog
+The New Project flow no longer opens `dialog.showOpenDialog`. New in-app folder browser (`PickerModal.tsx`): dark-navy panel, breadcrumbs, Up button, folder listing, Select this folder / Cancel. New IPC `cron:fs:list` (directory listing + parent pointer; empty arg = home). `cron:select-folder` now validates a passed path; native dialog retained only as a no-arg backward-compat fallback. New host-agnostic `folder-picker.ts` bridge (`awaitFolderSelection`/`settleFolderSelection`) keeps core Electron-free; `App.tsx` awaits the modal selection (no 400 ms pre-delay); preload exposes `fs.list` + path arg on `selectFolder`.
+
+### Fix #4 - Tray menu correctness (native menus cannot be CSS-styled)
+Windows native tray menus are OS-rendered, so Option A was applied: a correct, clearly-labelled item list from a pure `tray-template.mjs` (Open CRON for Code / Show active tasks / Pause current task / Stop current task / Quit CRON for Code + separators), unit-tested (labels/order + action wiring). Custom frameless tray window (Option B) deliberately out of scope.
+
+### Fix #5 - Sidebar lower stack always visible
+`lowerStackStyle` in `Sidebar.tsx` no longer sets `min-height: 0`, so the fixed lower stack keeps its natural height (CURRENT PROJECT / AGENT STATE / Settings / Account never clip or get pushed off-screen); the projects list is the only shrinkable+scrollable region. Lower-stack tests assert the flex contract (flexShrink 0, minHeight not forced to 0, projects overflow auto).
+
+### Verification
+`pnpm -r run test` 326/326 (contracts 24, data-service 94, host-adapter 23, core 185); `pnpm run typecheck` clean; `pnpm run lint` 0 errors (3 pre-existing exhaustive-deps warnings in App.tsx); `pnpm run build` clean (packages + standalone `dist-renderer`). `git status` confirms no staging/commits.
+
+### Files changed
+- Deleted: `packages/core/src/components/CronHeader.tsx`
+- New: `packages/core/src/folder-picker.ts`, `packages/core/src/tray-template.test.ts`, `apps/standalone/electron/tray-template.mjs`, `apps/standalone/electron/tray-template.d.mts`
+- Edited: `Layout.tsx`, `PickerModal.tsx`, `Sidebar.tsx`, `App.tsx`, `index.ts`, `project-management.test.tsx`, `workspace-layout.test.tsx`, `dev-marking.test.tsx`, `repo-stabilisation.test.ts` (core); `main.mjs`, `preload.cjs`, `register-ipc.mjs` (electron); `main.tsx`, `ipc-data-service.ts` (standalone)
+
+### Notes for Architect
+- Native tray menu styling is impossible on Windows; Option B (custom tray window) remains a possible future slice if Venessa wants pixel-level tray branding.
+- `cron:fs:list` is a new narrow main-process channel (directory listing only, path-validated). The renderer still never touches the filesystem directly; all paths come from main.
+- The picker happy path no longer opens any OS dialog; `cron:select-folder`'s native-dialog branch is a compatibility fallback only.
+- Dev stack not run/launched this session (unit/typecheck/lint/build verification only). Live tray-menu visual + folder-browser visuals remain Venessa's manual acceptance step.
+
+### Log rule
+Both `PROJECT_LOG.md` and this log appended per the permanent rule; `sym_log.md` written back with results.
+
+Return this complete report to the CRON Architect for review.
+
+---
+
+## Product Truth + Architecture Direction-Lock — 2026-08-21 (CC/OpenCode, read-only audit)
+
+Task type: read-only truth audit + direction lock (BB). No implementation slice. Working tree
+dirty and preserved. Branch `main`, HEAD `e18dfb7` (069a65c → 71eaf50 → e18dfb7 on top of
+8157b12). Log prose lagging Git history is flagged in PROJECT_LOG (this is a record, not a fix).
+
+### Locked product truth (BB, 2026-08-21)
+1. CRON for Code = non-coder's coder app (plain-language prompt → useful thing).
+2. OpenCode = real coding engine; CRON for Code = friendly safe non-technical wrapper
+   (plain-English plan/progress, approval gates, changed-file review, evidence/verification,
+   preview/test/export/deploy guidance, rollback expectations, no secret printing, no
+   Git commit/push/reset/clean without Venessa approval).
+3. CRON-wide model rule: cloud-first, Ollama local fallback, no LM Studio, automatic routing,
+   truthful model labels only.
+4. Two shells, one engine: Code Standalone (full app) + Code inside Intelligence (routed
+   capability later). Never duplicate the coding engine; Intelligence hands coding/build/fix
+   requests to Code; the user never knows which shell they are in.
+5. Roles: Intelligence/Gem thinks/remembers/plans/routes. Code builds. OpenCode edits/runs.
+   Venessa = final approval authority.
+
+### Audit conclusions (full detail in the report)
+- OpenCode is genuinely wired as the execution engine: OpenCodeRunner + CLI/server adapters,
+  same-session approval/resume, project-boundary enforcement, audit trail, plain-English
+  activity, live IPC stream. Runner + server-adapter test suites are green.
+- Prompt → OpenCode task works end to end today.
+- OpenCode can run headlessly/server-style; approval then resume works.
+- Gaps: (a) folder picker has no repo-boundary allowlist at selection (execution-time only);
+  (b) git-mutation rule is prompt-level for OpenCode, not structural; (c) changed-file/evidence
+  is heuristic (stdout + permission metadata), not a real `git status` walk; (d) LM Studio
+  assumptions are still live across main/preload/ipc/core UI; (e) no cloud/Ollama provider
+  layer exists; (f) escalation route is blocked in code.
+- Reusable core (packages/core AppDeps) is already host-neutral — Intelligence can embed the
+  same engine later via its own deps. Clean boundary, no duplication today.
+
+### Verification (all exit 0)
+`pnpm test` 326 PASS (contracts 24, data-service 94, host-adapter 23, core 185); `pnpm
+typecheck` PASS; `pnpm lint` PASS (0 errors, 3 pre-existing warnings); `pnpm build` PASS;
+`git diff --check` clean. No Windows/Vite sandbox issue.
+
+### Recommended next slice (small, direction-locked)
+Replace stale LM Studio provider/settings/docs with cloud-first + Ollama-fallback routing,
+preserving the OpenCode runner wiring and tests, implemented inside the reusable core boundary
+(so Intelligence can embed it later without duplicating the engine). No Intelligence build now.
+
+### Boundary
+Read-only audit. No source/test/config/dependency/lockfile change. No Git mutation. Only logs
+and report files appended/created.
+
+### Decision history (updated)
+- 2026-08-21 — product truth + architecture direction lock.
+- 2026-08-21 — model provider refactor (cloud-first + Ollama fallback, no LM Studio) (this entry).
+
+---
+
+## Model Provider Refactor — 2026-08-21 (CC/OpenCode, approved narrow slice)
+
+Task type: narrow implementation slice per BB. Goal: lock Code as the "plain-language creation
+app powered by OpenCode", remove active LM Studio assumptions, add cloud-first + Ollama
+fallback routing, preserve OpenCode, add non-coder wording, document the embeddable
+Intelligence boundary. No commit/push/reset/clean.
+
+### Delivered
+1. **Provider model (`packages/core/src/llm.ts` + `chat-runtime.ts`):** `LlmConfig` = cloud +
+   ollama. Cloud default `https://api.openrouter.ai/api/v1`; Ollama fallback
+   `http://127.0.0.1:11434/v1`. `activePlannerProvider` (cloud-first). Truthful route labels:
+   `Coding agent`, `Deeper reasoning`, `Planner`/`Vision` ("Cloud AI, local Ollama fallback").
+   No hardcoded Flash/Pro claims; handoff prompt uses configured `cloud.codingModel`.
+2. **Settings UI:** `ModelSettings.tsx` ("AI Settings") replaces `LlmSettings.tsx`; old file is
+   a deprecated shim (no imports). Cloud AI + Local AI (Ollama) sections.
+3. **Electron:** `cron:model:*` IPC replaces `cron:lmstudio:*`; chat is cloud-first with
+   automatic Ollama fallback; test probes both providers; API key never logged.
+4. **Wording:** "Planner — Gemma" → "Planner"; LM Studio strings removed from active runtime;
+   `activity-english` truthful labels.
+5. **Boundary:** README documents the Intelligence seam (input = project + plain-language task
+   + attachments/context; output = status/progress, approval requests, changed files,
+   verification evidence; shared engine = OpenCode runner + safety/audit/contracts + model
+   routing; standalone-only = Electron shell, tray, folder picker, window/restart controls).
+6. **Tests:** chat-runtime tests rewritten; repo-stabilisation guards model channels, Ollama
+   `:11434` (not `:1234`), and no LM Studio wording in active product source; new
+   model-settings tests.
+
+### Preserved
+OpenCode runner/server/approval/resume tests (7 + 3) green; audit; changed-file review;
+project-boundary checks; no Git mutation without approval.
+
+### Verification (exit 0)
+`pnpm test` 334 PASS (contracts 24, data-service 94, host-adapter 23, core 193/16 files).
+`pnpm typecheck` PASS. `pnpm lint` PASS (0 errors, 3 pre-existing warnings). `pnpm build` PASS.
+`git diff --check` clean.
+
+### Notes for the Architect
+- `LlmSettings.tsx` retained as a deprecated re-export shim because file deletion is not
+  available in this environment; no active imports remain.
+- Stale persisted `model.config`-key preference from the old `lmstudio.config` is not migrated
+  (old key simply unused); a migration slice can drop it later.
+- Ready for Venessa live test: cloud-first routing (Ollama fallback), OpenCode unchanged.
+
+### Boundary
+No Git mutation, no dependency/lockfile changes, unrelated work untouched.
+
+### Log rule
+Both `PROJECT_LOG.md` and this log appended; `sym_log.md` updated.
+
+Return this complete report to the CRON Architect for review.
+
+---
+
+## Self-Starting Dev-Mode Taskbar Shortcut — 2026-08-24 (BB, implementation)
+
+Task type: narrow implementation slice. Make the pinned taskbar shortcut launch DEV mode (fresh
+Vite source, not stale `dist-renderer`) with a single taskbar icon via a direct
+`electron.exe . --dev` target. Working tree dirty before this slice (pre-existing work);
+nothing staged/committed/pushed.
+
+### Stage call
+Implementation (bounded, dev-path only). No architectural change: production/normal mode
+(`loadFile(RENDERER_ENTRY)`) is byte-for-byte unchanged. No dependencies or lockfile changes.
+
+### Delivered
+1. **`apps/standalone/electron/main.mjs` — dev mode is now self-sufficient.** When `IS_DEV`,
+   before `loadURL(DEV_URL)`: probe the dev URL (global `fetch` + `AbortSignal.timeout(1500)`).
+   If reachable → no double-spawn. If unreachable → spawn the EXACT command `dev.mjs` uses
+   (`pnpm exec vite --port <port>`, cwd `projectRoot`, `shell: true`, `windowsHide: true`,
+   stdout/stderr appended to `.runtime/code-dev-vite-direct.log`, env `CRON_DEV: '1'`), store the
+   child in module-level `selfStartedViteProcess`, poll every ~500 ms (bounded 30 s) until the URL
+   serves, logging progress via the existing `logger`; on timeout it logs a clear error and
+   proceeds to `loadURL` anyway (startup diagnostics/watchdog surface the failure). New separate
+   `app.on('before-quit')` kills ONLY a self-started Vite (win32 `spawnSync taskkill /PID /T /F`,
+   else SIGTERM) then clears the handle; a Vite owned by `dev.mjs` is never touched. Added
+   `node:child_process` `spawn`/`spawnSync` import. Runtime marker + startup diagnostics intact.
+2. **`scripts/create-code-dev-shortcut.ps1`** — `Arguments` `'.'` → `'. --dev'`, description →
+   `'CRON for Code - development app (dev mode, self-starting)'`, final `Target:` line updated.
+   electron.exe target / working directory / icon unchanged.
+3. **`packages/core/src/repo-stabilisation.test.ts`** — narrowed ONE restart-safety assertion
+   (see below). All other guards intact.
+
+### Assertion adjusted
+`expect(main).not.toContain('spawn(')` asserted main.mjs had zero `spawn(` file-wide; main.mjs
+now legitimately spawns Vite at startup. Replaced with the same intent scoped to the restart
+handler: `expect(main).not.toMatch(/performAppRestart[\s\S]{0,3000}spawn\(/)`. Verified no
+`spawn(` exists inside or near `performAppRestart`. The `'powershell.exe'` and
+`run-code-dev-hidden.ps1` guards are untouched.
+
+### Verification (all exit 0)
+- `pnpm test` PASS — 362 tests (contracts 24, data-service 94, host-adapter 23, core 221/16
+  files), incl. `scripts/test-code-dev-launcher.ps1` (94 assertions) run inside
+  repo-stabilisation. No shortcut-arg assertion depended on the old `'.'` args.
+- `pnpm typecheck` PASS. `pnpm build` PASS (packages + standalone `dist-renderer`).
+- `git diff --check` clean (exit 0; only LF→CRLF advisories).
+
+### Notes for the Architect
+- One `restart-overlay.test.tsx` run showed a timing-sensitive test timing out under full
+  parallel load (5000 ms); it passes in isolation (3.5 s) and on the re-run (4.1 s). Pre-existing
+  flake, unrelated to this slice — not fixed per "do not touch unrelated code".
+- The shortcut script header comment still says "(normal mode)" in its prose (line ~8); the
+  functional description string was changed per spec. Left as-is (out of the 3 specified edits) —
+  worth a one-line doc tidy in a future slice.
+- Taskbar acceptance remains Venessa's visual step (pin the `.lnk`, click it: one icon, Vite
+  self-starts when not running).
+
+### Trust score
+8/10. All changes verified by test/typecheck/build/diff-check and the standalone launcher suite.
+Not 9-10 because live taskbar behavior (single-icon merge + Vite cold start) was NOT exercised on
+a running Windows session this slice — it needs Venessa's visual acceptance.
+
+### Priority fixes for Venessa/Architect (decisions, not implemented)
+1. Update the stale "(normal mode)" prose in the `create-code-dev-shortcut.ps1` header comment.
+2. Reconsider the 5000 ms default vitest timeout for the linger test (flaky under load) if it
+   keeps timing out.
+
+### Log rule
+Both `PROJECT_LOG.md` and this log appended.
 
 Return this complete report to the CRON Architect for review.

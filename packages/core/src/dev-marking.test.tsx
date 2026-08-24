@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { createWorkspaceStore } from './store.js';
 import { WorkspaceProvider } from './context.js';
-import { CronHeader } from './components/CronHeader.js';
 import { CronFooter } from './components/CronFooter.js';
 import { PickerModal } from './components/PickerModal.js';
 import { CronAssistant } from './components/CronAssistant.js';
@@ -77,24 +76,6 @@ function renderWithStore(ui: ReactNode, store: ReturnType<typeof createWorkspace
   return render(ui, { wrapper });
 }
 
-describe('CRON Online is a non-clickable status', () => {
-  it('renders as a status element, not a button', () => {
-    const store = createWorkspaceStore({ dataService: makeDataService(), hostAdapter: {} as never });
-    renderWithStore(<CronHeader />, store);
-    const status = screen.getByTestId('cron-online-status');
-    expect(status.getAttribute('role')).toBe('status');
-    expect(status.tagName).not.toBe('BUTTON');
-    expect(screen.getByText('CRON Online')).toBeTruthy();
-  });
-
-  it('shows Restarting state while a restart is in flight', () => {
-    const store = createWorkspaceStore({ dataService: makeDataService(), hostAdapter: {} as never });
-    store.setState({ isRestarting: true });
-    renderWithStore(<CronHeader />, store);
-    expect(screen.getByTestId('cron-online-status').textContent).toMatch(/Restarting/);
-  });
-});
-
 describe('footer placeholder tabs are truthfully DEV marked', () => {
   it('shows a red DEV badge on every placeholder tab', () => {
     const store = createWorkspaceStore({ dataService: makeDataService(), hostAdapter: {} as never });
@@ -135,8 +116,10 @@ describe('CRON-styled picker flow', () => {
       });
     render(<CronCodeApp deps={{ dataService, hostAdapter }} />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Open Project/i })).toBeTruthy());
-    screen.getByRole('button', { name: /Open Project/i }).click();
+    // The Home screen is the "no project selected" entry view; its hero Build
+    // button runs the existing New-Project picker flow.
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeTruthy());
+    screen.getByRole('button', { name: 'Build' }).click();
 
     // While the (native) picker is in flight, the CRON modal is visible.
     await waitFor(() => expect(screen.getByTestId('picker-modal')).toBeTruthy());

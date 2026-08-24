@@ -7,6 +7,7 @@
 
 export const ALL_IPC_CHANNELS = Object.freeze([
   'cron:select-folder',
+  'cron:fs:list',
   'cron:db:load-all',
   'cron:db:save-project',
   'cron:db:delete-project',
@@ -36,10 +37,10 @@ export const ALL_IPC_CHANNELS = Object.freeze([
   'cron:diag:marker',
   'cron:diag:ready',
   'cron:diag:usable',
-  'cron:lmstudio:get-config',
-  'cron:lmstudio:save-config',
-  'cron:lmstudio:test',
-  'cron:lmstudio:chat',
+  'cron:model:get-config',
+  'cron:model:save-config',
+  'cron:model:test',
+  'cron:model:chat',
 ]);
 
 /** The eight project-management + lifecycle channels that must always be live. */

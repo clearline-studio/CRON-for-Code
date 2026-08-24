@@ -6,7 +6,7 @@
   --cron-shell-bg-image: none;
   --cron-shell-surface: #0b1628;
   --cron-shell-border: #12254a;
-  --cron-shell-text: #eaf2ff;
+  --cron-shell-text: #f5f9ff;
   --cron-shell-text-muted: #5f7392;
 
   /* Branding */
@@ -25,19 +25,19 @@
 
   /* Header */
   --cron-header-bg: linear-gradient(to bottom, #0a1428, #060f24);
-  --cron-header-height: 104px;
+  --cron-header-height: 88px;
   --cron-nav-bg: #0c1a30;
-  --cron-nav-height: 52px;
+  --cron-nav-height: 44px;
 
   /* Panels */
   --cron-panel-bg: #0b1628;
   --cron-panel-border: rgba(80, 140, 220, 0.28);
-  --cron-panel-text: #eaf2ff;
+  --cron-panel-text: #f5f9ff;
   --cron-panel-text-muted: #5f7392;
 
   /* Footer */
   --cron-footer-bg: #060f24;
-  --cron-footer-height: 26px;
+  --cron-footer-height: 22px;
 
   /* Workspace surfaces */
   --cron-surface-bg: #0d1b31;
@@ -45,7 +45,7 @@
   --cron-surface-border: rgba(80, 140, 220, 0.22);
 
   /* Text */
-  --cron-text-primary: #eaf2ff;
+  --cron-text-primary: #f5f9ff;
   --cron-text-secondary: #8da4c7;
   --cron-text-tertiary: #5f7392;
   --cron-text-inverse: #050812;
@@ -63,25 +63,25 @@
   --cron-accent-subtle: rgba(59, 130, 246, 0.12);
 
   /* Borders */
-  --cron-border-radius-sm: 4px;
-  --cron-border-radius-md: 6px;
-  --cron-border-radius-lg: 8px;
+  --cron-border-radius-sm: 3px;
+  --cron-border-radius-md: 5px;
+  --cron-border-radius-lg: 7px;
 
   /* Spacing */
-  --cron-space-xs: 4px;
-  --cron-space-sm: 8px;
-  --cron-space-md: 16px;
-  --cron-space-lg: 24px;
-  --cron-space-xl: 32px;
+  --cron-space-xs: 3px;
+  --cron-space-sm: 7px;
+  --cron-space-md: 14px;
+  --cron-space-lg: 20px;
+  --cron-space-xl: 28px;
 
   /* Typography */
   --cron-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --cron-font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  --cron-font-size-xs: 10px;
-  --cron-font-size-sm: 12px;
-  --cron-font-size-md: 14px;
-  --cron-font-size-lg: 16px;
-  --cron-font-size-xl: 22px;
+  --cron-font-size-xs: 9px;
+  --cron-font-size-sm: 10px;
+  --cron-font-size-md: 12px;
+  --cron-font-size-lg: 14px;
+  --cron-font-size-xl: 19px;
   --cron-line-height: 1.5;
 }
 
@@ -126,4 +126,12 @@
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+
+/* Crisper text (design polish): bright-white primary text + font smoothing. */
+html, body, #root {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
