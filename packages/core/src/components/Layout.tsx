@@ -60,6 +60,10 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
   // Home view is the default landing.
   const [centreView, setCentreView] = useState<LeftTabId | null>(null);
   const [leftPanel, setLeftPanel] = useState<LeftTabId | null>(null);
+  // Collapse-to-rail (Intelligence-style): clicking the active panel tab hides
+  // the panel (keeps the tab highlighted) so the chat takes the freed space;
+  // clicking it again re-expands. Only the Projects panel uses this.
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   // Right edge: controlled by Layout so the notification bell can open Review.
   const [rightTab, setRightTab] = useState<RightTabId | null>(null);
   const hadProjectRef = useRef(false);
@@ -73,6 +77,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
     if (activeProjectId && !hadProjectRef.current) {
       setLeftPanel('projects');
       setCentreView(null);
+      setLeftPanelCollapsed(false);
     }
     hadProjectRef.current = !!activeProjectId;
   }, [activeProjectId]);
@@ -83,6 +88,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
     setDrawerOpen(false);
     setCentreView(null);
     setLeftPanel('projects');
+    setLeftPanelCollapsed(false);
   }
 
   function startNewSession() {
@@ -103,12 +109,14 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
   function openCentreView(view: LeftTabId) {
     setCentreView(view);
     setLeftPanel(null);
+    setLeftPanelCollapsed(false);
   }
 
   /** Opens the Projects panel (the "Projects view"). */
   function openProjectsView() {
     setCentreView(null);
     setLeftPanel('projects');
+    setLeftPanelCollapsed(false);
   }
 
   function toggleLeftTab(tab: LeftTabId) {
@@ -128,8 +136,11 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
       return;
     }
     if (tab === 'projects') {
-      if (leftPanel === 'projects') {
-        setLeftPanel(null);
+      // Intelligence-style collapse: clicking the open (un-collapsed) panel
+      // collapses it to the rail; clicking again (or while on a different view)
+      // re-opens it.
+      if (leftPanel === 'projects' && !leftPanelCollapsed) {
+        setLeftPanelCollapsed(true);
       } else {
         openProjectsView();
       }
@@ -175,6 +186,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
       <div style={showOryxBackdrop ? appStyle : glowAppStyle}>
         <ErrorBanner />
         <header style={topBarStyle} data-testid="workspace-topbar">
+          <span style={brandStyle} data-testid="topbar-brand"><span style={brandWordStyle}>CRON</span> <span style={brandAccentStyle}>for Code</span></span>
           <div style={buildModeStyle}>
             <span style={buildModeLabelStyle}>Build mode:</span>
             <div style={buildModePillStyle} role="status" data-testid="cron-online-status">
@@ -222,7 +234,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
             <LogoHeader />
             <div style={leftRegionBodyStyle}>
               <LeftTabStrip active={leftActive} onToggle={toggleLeftTab} onOpenReview={() => setRightTab('review')} />
-              {leftPanel === 'projects' && (
+              {leftPanel === 'projects' && !leftPanelCollapsed && (
                 <ProjectBrowser onNewProject={onSelectProject} onSelectProject={(projectId) => void chooseProject(projectId)} onViewAll={openProjectsView} />
               )}
             </div>
@@ -290,6 +302,9 @@ const appBaseStyle: CSSProperties = { position: 'relative', zIndex: 1, height: '
 const appStyle: CSSProperties = { ...appBaseStyle, background: 'linear-gradient(to bottom, rgba(5, 8, 18, 0.88), rgba(5, 8, 18, 0.94))' };
 const glowAppStyle: CSSProperties = { ...appBaseStyle, background: 'linear-gradient(to bottom, rgba(5, 8, 18, 0.56), rgba(5, 8, 18, 0.72))' };
 const topBarStyle: CSSProperties = { height: 40, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px', borderBottom: '1px solid rgba(100,160,255,.2)', background: 'rgba(2, 9, 23, 0.9)', boxSizing: 'border-box' };
+const brandStyle: CSSProperties = { flexShrink: 0, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.3, whiteSpace: 'nowrap', color: '#eaf2ff', paddingRight: 2 };
+const brandWordStyle: CSSProperties = { color: '#eaf2ff' };
+const brandAccentStyle: CSSProperties = { color: '#1F82FF', fontWeight: 600 };
 const buildModeStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 };
 const buildModeLabelStyle: CSSProperties = { color: '#8da4c7', fontSize: 10.5, whiteSpace: 'nowrap' };
 const buildModePillStyle: CSSProperties = { height: 22, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 9px', border: '1px solid rgba(34,197,94,.32)', borderRadius: 999, background: 'rgba(20,83,45,.2)', color: '#9ee6b2', fontSize: 10.5, whiteSpace: 'nowrap' };
@@ -302,9 +317,13 @@ const speakButtonStyle: CSSProperties = { height: 28, display: 'inline-flex', al
 const sessionTabsStyle: CSSProperties = { flex: 1, minWidth: 0, height: 26, display: 'flex', alignItems: 'center', gap: 8, padding: '0 9px', border: '1px solid rgba(100,160,255,.18)', borderRadius: 6, background: 'rgba(3, 12, 28, .72)' };
 const activeSessionStyle: CSSProperties = { maxWidth: '42%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#f5f9ff', fontSize: 11.5, fontWeight: 700 };
 const sessionMetaStyle: CSSProperties = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#8da4c7', fontSize: 10.5 };
-const workspaceStyle: CSSProperties = { flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' };
-const leftRegionStyle: CSSProperties = { flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' };
-const leftRegionBodyStyle: CSSProperties = { flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' };
+// The left Projects panel sits as a fixed column between the rail and the chat
+// (Intelligence-style): it flexes the chat wider/narrower, never overlays it.
+// The right panels still float over the centre (Code-specific, no right panel
+// in Intelligence). workspace stays position:relative for the right overlays.
+const workspaceStyle: CSSProperties = { flex: 1, minHeight: 0, display: 'flex', position: 'relative', overflow: 'hidden' };
+const leftRegionStyle: CSSProperties = { flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' };
+const leftRegionBodyStyle: CSSProperties = { flex: 1, minHeight: 0, display: 'flex' };
 const centrePaneStyle: CSSProperties = { flex: 1, minWidth: 0, minHeight: 0, display: 'flex', overflow: 'hidden' };
 const centreInnerStyle: CSSProperties = { flex: 1, minWidth: 0, minHeight: 0, display: 'flex', overflow: 'hidden' };
 const conversationPaneStyle: CSSProperties = { flex: 1, minWidth: 340, minHeight: 0, display: 'flex', overflow: 'hidden' };

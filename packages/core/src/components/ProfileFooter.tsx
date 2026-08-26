@@ -96,6 +96,7 @@ const versionStyle: CSSProperties = {
 
 // --- Profile avatar at the bottom of the left rail (above the global footer). ---
 const avatarWrapStyle: CSSProperties = {
+  width: 64,
   flexShrink: 0,
   position: 'relative',
   display: 'flex',

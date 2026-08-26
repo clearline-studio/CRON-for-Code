@@ -1904,3 +1904,33 @@ Working tree dirty (pre-existing uncommitted work + this slice). Nothing staged/
   legitimate spawn is added; scope such guards to the exact function region they protect.
 - The dev-server self-start must check reachability BEFORE spawning to avoid double-Vite when
   `dev.mjs`/the launcher already owns a server on 5190.
+
+---
+
+## 2026-08-24 — BB: "Lock the canvas" (floating panels over the centre)
+
+### What was done
+The centre chat/canvas no longer resizes or shifts when the left Projects panel or a right-side panel opens/closes. Both panels were converted from inline flex-flow children (which flexed the centre away) into absolute overlays that FLOAT over the centre.
+
+- `packages/core/src/components/Layout.tsx`:
+  - `workspaceStyle` gained `position: relative`.
+  - The Projects panel moved out of the left region's flex flow into a floating wrapper (`floatingProjectsPanelStyle`): `position: absolute; top: 0; bottom: 0; left: 64; zIndex: 5`, width 245 (ProjectBrowser's actual width — the spec's ~290 was out of date), near-opaque `rgba(3,12,28,0.98)` background, `borderRight: 1px solid rgba(100,160,255,.26)`, drop shadow `14px 0 40px rgba(0,0,0,.35)`.
+  - The wrapper is anchored to the LEFT REGION BODY (kept `position: relative`) rather than the whole `<main>`. Reason: `LogoHeader` has `minWidth: 200`, so the left region is 200px wide (64px rail + 136px empty band), and the profile avatar is centred in that 200px width. Anchoring top:0/bottom:0 to `<main>` would have covered the logo wordmark AND the avatar when Projects is open. Anchoring to the body keeps the panel flush against the rail, between the logo header and the avatar (exactly where the old inline panel sat).
+  - Removed `overflow: hidden` from the left region and left region body (it would clip the panel which now reaches past the 200px region into the centre).
+- `packages/core/src/components/RightSidebar.tsx`:
+  - `edgeStyle` gained `position: relative` and dropped `overflow: hidden` (that clip was cutting off the panel, which now extends left past the 44px strip).
+  - `panelStyle` is now `position: absolute; top: 0; bottom: 0; right: 44; zIndex: 5`, width 280, near-opaque background (0.94?0.98), `borderLeft` kept, drop shadow `-14px 0 40px rgba(0,0,0,.35)`.
+
+### Key findings
+- ProjectBrowser's actual width is 245px, not ~290 (spec said "verify" — verified).
+- LogoHeader `minWidth: 200` makes the left region 200px wide; this is why an anchored-to-main full-height overlay would cover the brand header and avatar.
+- All existing `data-testid`s, tab behaviour and close behaviour unchanged.
+
+### Verification (all pass)
+- `pnpm test` PASS — 362 tests (contracts 24, data-service 94, host-adapter 23, core 221).
+- `pnpm typecheck` PASS (all 7 packages).
+- `pnpm build` PASS (packages + standalone `dist-renderer`).
+- `git diff --check` PASS for the two changed source files (exit 0; only LF?CRLF advisories). The repo-wide `git diff --check` still flags pre-existing trailing whitespace in `sym_log.md` (untouched by this task).
+
+### Current state
+Working tree dirty (pre-existing uncommitted work + this change + the `dist-renderer/index.html` bundle-hash refresh from the build). Nothing staged/committed/pushed. Backups: `Layout.tsx.bak-2026-08-24`, `RightSidebar.tsx.bak-2026-08-24`.

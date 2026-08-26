@@ -201,7 +201,9 @@ const edgeStyle: CSSProperties = {
   flexShrink: 0,
   minHeight: 0,
   display: 'flex',
-  overflow: 'hidden',
+  position: 'relative',
+  // No overflow clip: the open panel is an absolute overlay that extends LEFT
+  // over the centre (past the 44px strip); clipping would cut it off.
 };
 
 const stripStyle: CSSProperties = {
@@ -242,15 +244,21 @@ const activeTabStyle: CSSProperties = {
   boxShadow: '0 0 12px rgba(23, 107, 255, 0.28)',
 };
 
+// The open panel FLOATS over the centre: absolute, right edge flush against
+// the 44px strip's left edge, so the centre never shrinks when it opens.
 const panelStyle: CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  right: 44,
+  zIndex: 5,
   width: 280,
-  flexShrink: 0,
-  minHeight: 0,
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
-  background: 'rgba(4, 13, 28, 0.94)',
+  background: 'rgba(4, 13, 28, 0.98)',
   borderLeft: '1px solid rgba(100,160,255,.18)',
+  boxShadow: '-14px 0 40px rgba(0,0,0,.35)',
   boxSizing: 'border-box',
 };
 

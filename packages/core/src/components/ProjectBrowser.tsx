@@ -145,7 +145,7 @@ export function ProjectBrowser({ onNewProject, onSelectProject, onViewAll }: Pro
 }
 
 const browserStyle: CSSProperties = {
-  width: 245,
+  width: 200,
   flexShrink: 0,
   minHeight: 0,
   display: 'flex',

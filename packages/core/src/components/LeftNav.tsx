@@ -133,9 +133,6 @@ export function LogoHeader() {
       ) : (
         <Boxes size={20} color="#1F82FF" style={{ flexShrink: 0 }} />
       )}
-      <span style={wordmarkStyle}>
-        <span style={cronWordStyle}>CRON</span> <span style={forCodeStyle}>for Code</span>
-      </span>
     </div>
   );
 }
@@ -153,12 +150,12 @@ const navStyle: CSSProperties = {
 };
 
 const logoHeaderStyle: CSSProperties = {
+  width: 64,
   flexShrink: 0,
   display: 'flex',
   alignItems: 'center',
-  gap: 9,
-  padding: '11px 12px',
-  minWidth: 200,
+  justifyContent: 'center',
+  padding: '10px 8px',
   boxSizing: 'border-box',
   background: 'rgba(4, 13, 28, 0.94)',
   borderBottom: '1px solid rgba(100,160,255,.18)',
@@ -188,17 +185,6 @@ const logoMediaStyle: CSSProperties = {
   borderRadius: 8,
   background: 'rgba(3, 10, 22, 0.85)',
 };
-
-const wordmarkStyle: CSSProperties = {
-  fontSize: 14,
-  fontWeight: 800,
-  letterSpacing: 0.3,
-  whiteSpace: 'nowrap',
-};
-
-const cronWordStyle: CSSProperties = { color: '#eaf2ff' };
-
-const forCodeStyle: CSSProperties = { color: '#1F82FF', fontWeight: 600 };
 
 const navListStyle: CSSProperties = {
   flex: 1,

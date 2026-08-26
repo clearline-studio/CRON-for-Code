@@ -438,8 +438,10 @@ describe('Layout workspace hierarchy', () => {
     });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
     expect(screen.getByTestId('opencode-style-workspace')).toBeTruthy();
-    // The brand header (framed logo + wordmark) is persistent above the left rail.
+    // The icon-only logo header is persistent above the left rail; the
+    // "CRON for Code" wordmark lives in the top bar.
     expect(screen.getByTestId('app-logo-header')).toBeTruthy();
+    expect(screen.getByTestId('topbar-brand')).toBeTruthy();
     expect(screen.getByText('CRON')).toBeTruthy();
     expect(screen.getByText('for Code')).toBeTruthy();
     expect(screen.getByTestId('left-tab-strip')).toBeTruthy();
@@ -743,9 +745,7 @@ describe('Slice 1 shell components', () => {
       expect(video?.loop).toBe(true);
       expect(video?.muted).toBe(true);
       expect(video?.hasAttribute('playsinline')).toBe(true);
-      // Wordmark sits beside the framed logo.
-      expect(screen.getByText('CRON')).toBeTruthy();
-      expect(screen.getByText('for Code')).toBeTruthy();
+      // The wordmark lives in the top bar now; the logo header is icon-only.
     } finally {
       document.documentElement.style.removeProperty('--cron-logo-video-url');
     }

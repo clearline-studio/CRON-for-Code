@@ -168,18 +168,53 @@ Read `CC_CODE_UI_LAUNCHER_PROMPT.md` (or this entry) â€” build the self-sufficie
 
 ---
 
-### BB REPORT (2026-08-24) — self-sufficient dev-mode taskbar shortcut: DONE, all green
+## 2026-08-24 (late) - Gem P â€” "lock the canvas" layout fix (her #1 item)
+
+**Decision (Venessa chose):** panels float OVER the chat â€” the centre never moves or resizes when the left Projects list or a right panel opens/closes.
+
+**Current cause of the jump:** `Layout.tsx` renders the Projects panel inline in the left column and `RightSidebar.tsx` renders the open panel inline in the right edge, both in the flex flow â†’ the centre (`flex: 1`) shrinks when either opens.
+
+**Fix:** convert both panels to absolute overlays (floating over the centre), anchored to the rail/strip edges. Locked facts: left tab rail = 64px (`LeftTabStrip.stripStyle`), right strip = 44px, right panel = 280px, Projects panel ~290px (verify). `workspaceStyle` needs `position: relative`. Watch for `overflow: hidden` clipping the floating panels (edge/region containers). Do NOT touch the logo header, tab rail, avatar, or centre/chat internals. Handed to BB.
+
+---
+
+### BB REPORT (2026-08-24) ï¿½ self-sufficient dev-mode taskbar shortcut: DONE, all green
 
 **Files changed:**
-1. pps/standalone/electron/main.mjs — dev self-start: when IS_DEV, probe DEV_URL (fetch + AbortSignal.timeout(1500)); if unreachable, spawn the exact dev.mjs Vite command (pnpm exec vite --port <port>, cwd projectRoot, shell:true, windowsHide:true, stdio appended to .runtime/code-dev-vite-direct.log, env CRON_DEV=1), store child in module-level selfStartedViteProcess, poll ~500ms bounded 30s, log via logger, proceed to loadURL on failure anyway. New pp.on('before-quit') kills ONLY a self-started Vite (taskkill /PID /T /F on win32, else SIGTERM) then clears handle. Added 
+1. pps/standalone/electron/main.mjs ï¿½ dev self-start: when IS_DEV, probe DEV_URL (fetch + AbortSignal.timeout(1500)); if unreachable, spawn the exact dev.mjs Vite command (pnpm exec vite --port <port>, cwd projectRoot, shell:true, windowsHide:true, stdio appended to .runtime/code-dev-vite-direct.log, env CRON_DEV=1), store child in module-level selfStartedViteProcess, poll ~500ms bounded 30s, log via logger, proceed to loadURL on failure anyway. New pp.on('before-quit') kills ONLY a self-started Vite (taskkill /PID /T /F on win32, else SIGTERM) then clears handle. Added 
 ode:child_process import. Normal/production path untouched.
-2. scripts/create-code-dev-shortcut.ps1 — Arguments . ? . --dev; description ? (dev mode, self-starting); Target output line updated. Everything else unchanged.
-3. packages/core/src/repo-stabilisation.test.ts — narrowed ONE assertion: expect(main).not.toContain('spawn(') (file-wide) ? expect(main).not.toMatch(/performAppRestart[\s\S]{0,3000}spawn\(/) because main.mjs now legitimately spawns Vite at startup. Safety intent (restart handler never spawns launcher/powershell) preserved.
+2. scripts/create-code-dev-shortcut.ps1 ï¿½ Arguments . ? . --dev; description ? (dev mode, self-starting); Target output line updated. Everything else unchanged.
+3. packages/core/src/repo-stabilisation.test.ts ï¿½ narrowed ONE assertion: expect(main).not.toContain('spawn(') (file-wide) ? expect(main).not.toMatch(/performAppRestart[\s\S]{0,3000}spawn\(/) because main.mjs now legitimately spawns Vite at startup. Safety intent (restart handler never spawns launcher/powershell) preserved.
 
 **Verification (real):**
-- pnpm test — PASS, 362 tests (contracts 24, data-service 94, host-adapter 23, core 221). 	est-code-dev-launcher.ps1 (94 assertions) PASS; no assertion depended on the old . args.
-- pnpm typecheck — PASS (all 7 packages). pnpm build — PASS.
-- git diff --check — exit 0 (only pre-existing LF?CRLF warnings).
-- Flaky note: estart-overlay.test.tsx "lingers until ready" timed out once under full parallel load (needs ~3.5-4.1s); passes in isolation and on re-run. Pre-existing timing flake, unrelated to this change — not fixed.
+- pnpm test ï¿½ PASS, 362 tests (contracts 24, data-service 94, host-adapter 23, core 221). 	est-code-dev-launcher.ps1 (94 assertions) PASS; no assertion depended on the old . args.
+- pnpm typecheck ï¿½ PASS (all 7 packages). pnpm build ï¿½ PASS.
+- git diff --check ï¿½ exit 0 (only pre-existing LF?CRLF warnings).
+- Flaky note: estart-overlay.test.tsx "lingers until ready" timed out once under full parallel load (needs ~3.5-4.1s); passes in isolation and on re-run. Pre-existing timing flake, unrelated to this change ï¿½ not fixed.
+
+**Not done:** no commits/staging. Logs updated (PROJECT_LOG.md, CRON_ARCHITECT_LOG.md, this entry).
+
+---
+
+### BB REPORT (2026-08-24) — "Lock the canvas": DONE, all green
+
+**Files changed (source):**
+1. `packages/core/src/components/Layout.tsx` — Projects panel is now a floating absolute overlay over the centre.
+2. `packages/core/src/components/RightSidebar.tsx` — open panel is now a floating absolute overlay over the centre.
+(Backups: `*.bak-2026-08-24` beside each. `dist-renderer/index.html` changed only by the build's bundle-hash refresh.)
+
+**Key diff summary:**
+- Left overlay: `workspaceStyle` + `position: relative`; Projects panel wrapped in `floatingProjectsPanelStyle` = `position:absolute; top:0; bottom:0; left:64; zIndex:5; width:245; background:rgba(3,12,28,.98); borderRight:1px solid rgba(100,160,255,.26); boxShadow:14px 0 40px rgba(0,0,0,.35)`. Left region + left region body `overflow:hidden` removed (would clip the panel); the body is the positioning context.
+- Right overlay: `edgeStyle` + `position:relative`, `overflow:hidden` removed (was clipping the panel); `panelStyle` = `position:absolute; top:0; bottom:0; right:44; zIndex:5; width:280; background rgba(4,13,28,.98); borderLeft kept; boxShadow:-14px 0 40px rgba(0,0,0,.35)`.
+- Centre pane untouched — keeps its full width at all times. All `data-testid`s, tabs, close buttons identical.
+
+**DEVATION FROM SPEC LETTER (flagged):** The spec said `top:0; bottom:0` relative to `<main>`, but `LogoHeader` has `minWidth:200` so the left region is 200px wide (rail 64 + empty band) and the profile avatar is centred in that 200px. Anchoring to `<main>` would cover the "CRON for Code" wordmark AND the avatar whenever Projects is open. I anchored the overlay to the LEFT REGION BODY instead (kept `position:relative`), so it is still `left:64` flush against the rail, spans between logo header and avatar, and never covers either. Same values, one different containing block. Please confirm this is the intended look.
+
+**Verification (real):**
+- `pnpm test` PASS — 362 tests (contracts 24, data-service 94, host-adapter 23, core 221).
+- `pnpm typecheck` PASS (all 7 packages).
+- `pnpm build` PASS (packages + standalone `dist-renderer`).
+- `git diff --check` on the two changed source files: exit 0 (only LF->CRLF advisories). Repo-wide diff-check still flags PRE-EXISTING trailing whitespace in `sym_log.md` only (untouched by me).
+- Style contract confirmed via a scratch render (left: absolute/left 64/z5/width 245; right: absolute/right 44/z5/width 280) — scratch file removed afterwards.
 
 **Not done:** no commits/staging. Logs updated (PROJECT_LOG.md, CRON_ARCHITECT_LOG.md, this entry).

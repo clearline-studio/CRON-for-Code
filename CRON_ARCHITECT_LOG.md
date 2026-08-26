@@ -4310,3 +4310,26 @@ a running Windows session this slice â€” it needs Venessa's visual acceptance.
 Both `PROJECT_LOG.md` and this log appended.
 
 Return this complete report to the CRON Architect for review.
+
+---
+
+## 2026-08-24 — BB: "Lock the canvas" (floating panels over the centre)
+
+### Stage call
+Polished shell/visual stage. Layout restructure only; no logic/wiring changes.
+
+### Summary
+Converted the left Projects panel and the right-side open panel from inline flex-flow children into absolute overlays that float over the centre, so the centre (chat) never resizes or shifts. Left: Projects panel anchored to the rail's right edge (`left: 64`, width 245 = ProjectBrowser's real width, zIndex 5, solid bg + border + shadow), positioned via the left-region body so it stays between the logo header and profile avatar. Right: panel anchored `right: 44` (flush against the 44px strip), width 280, zIndex 5, solid bg + border + shadow. Both edge/region containers had `overflow: hidden` removed (it would clip the floating panels). `workspaceStyle` now `position: relative`.
+
+### Note for the Architect (Gem P)
+- The spec said Projects panel "~290px"; the real width is 245px. Kept 245.
+- `LogoHeader` has `minWidth: 200`, so the left region is 200px wide (64px rail + empty band), and the profile avatar is centred in that 200px. I anchored the overlay to the left-region body (not `<main>`) so it does NOT cover the "CRON for Code" wordmark or the avatar. If the shell is ever rebalanced to a true 64px left region, the overlay can move to `<main>` at `left: 64` with `top: 0; bottom: 0` unchanged.
+- `apps/standalone/dist-renderer/index.html` changed only by the build (bundle hash). No source edit.
+- Repo-wide `git diff --check` still reports pre-existing trailing whitespace in `sym_log.md` only.
+
+### Trust score
+9/10. All verification green (test/typecheck/build/diff-check) and the style contract was asserted via a scratch render (left overlay: absolute/left 64/zIndex 5/width 245; right overlay: absolute/right 44/zIndex 5/width 280). Not 10 because live visual acceptance (panel sliding, shadow, readability over the chat) is Venessa's manual step — jsdom cannot measure layout.
+
+### Priority fixes for Venessa/Architect (decisions, not implemented)
+1. Decide whether the left region staying 200px wide (LogoHeader minWidth) is desired long-term; if a true 64px rail is wanted, that is a follow-up design task.
+2. Reconsider the Projects panel width 245 vs the ~290 in the original spec (kept 245 as the real component value).
