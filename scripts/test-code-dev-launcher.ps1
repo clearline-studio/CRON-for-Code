@@ -236,8 +236,8 @@ finally {
 
 $launcher = Get-Content -LiteralPath (Join-Path $scriptDir 'run-code-dev-hidden.ps1') -Raw
 $logic = Get-Content -LiteralPath (Join-Path $scriptDir 'code-dev-launcher-logic.ps1') -Raw
-$vbs = Get-Content -LiteralPath (Join-Path $repoRoot 'launch-cron-for-code-dev.vbs') -Raw
-$bat = Get-Content -LiteralPath (Join-Path $repoRoot 'Launch-CRON-for-Code-Dev.bat') -Raw
+$vbs = Get-Content -LiteralPath (Join-Path $repoRoot 'launch.vbs') -Raw
+$batPath = Join-Path $repoRoot 'Launch-CRON-for-Code-Dev.bat'
 $shortcutScript = Get-Content -LiteralPath (Join-Path $scriptDir 'create-code-dev-shortcut.ps1') -Raw
 
 Assert-True ($launcher -match 'code-dev-launcher-logic\.ps1') 'launcher dot-sources the logic module'
@@ -270,7 +270,7 @@ Assert-True ($launcher -match 'Get-OwnedElectronMainPid') 'launcher only ever te
 Assert-True ($vbs -match 'WScript\.ScriptFullName') 'VBS resolves repo root dynamically (no hardcoded user)'
 Assert-True ($vbs -notmatch 'CRON_CODE_DEV_PORT') 'VBS has no temporary terminal environment dependency'
 Assert-True ($vbs -notmatch 'CRON_DEV') 'VBS does not depend on a terminal-set environment variable'
-Assert-True ($bat -match '%~dp0') 'BAT resolves repo root dynamically'
+Assert-True (-not (Test-Path -LiteralPath $batPath)) 'no console-flash BAT wrapper (retired per standard launcher)'
 
 Assert-True ($shortcutScript -match 'electron\.exe') 'shortcut creator targets electron.exe directly (single taskbar identity)'
 Assert-True ($shortcutScript -notmatch 'launch-cron-for-code-dev') 'shortcut creator does not target the VBS launcher'

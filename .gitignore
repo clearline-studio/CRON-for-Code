@@ -49,3 +49,8 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Pre-edit snapshots
+backups/
+_dump_/
+unrecon_nessa.md

@@ -75,8 +75,7 @@ function runEslintOverRepo(timeoutMs: number): Promise<{ status: number | null; 
 }
 
 const LAUNCHER_FILES = [
-  'Launch-CRON-for-Code-Dev.bat',
-  'launch-cron-for-code-dev.vbs',
+  'launch.vbs',
   'scripts/run-code-dev-hidden.ps1',
   'scripts/create-code-dev-shortcut.ps1',
 ];
@@ -472,10 +471,9 @@ describe('dev launcher', () => {
     expect(ps1).not.toContain('C:\\Users');
     expect(ps1).not.toContain('venes');
     expect(ps1).toContain('$PSScriptRoot');
-    const vbs = readRepoFile('launch-cron-for-code-dev.vbs');
+    const vbs = readRepoFile('launch.vbs');
     expect(vbs).toContain('WScript.ScriptFullName');
-    const bat = readRepoFile('Launch-CRON-for-Code-Dev.bat');
-    expect(bat).toContain('%~dp0');
+    expect(repoPathExists('Launch-CRON-for-Code-Dev.bat')).toBe(false);
   });
 
   it('launcher does not contain automatic install commands', () => {
@@ -521,7 +519,7 @@ describe('dev launcher restart safety', () => {
     expect(ps1).not.toContain('venes');
     expect(ps1).toContain('$PSScriptRoot');
     expect(ps1).toContain('code-dev-state.json');
-    const vbs = readRepoFile('launch-cron-for-code-dev.vbs');
+    const vbs = readRepoFile('launch.vbs');
     expect(vbs).not.toContain('CRON_CODE_DEV_PORT');
     const shortcut = readRepoFile('scripts/create-code-dev-shortcut.ps1');
     expect(shortcut).not.toContain('CRON_CODE_DEV_PORT');
