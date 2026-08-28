@@ -6,7 +6,7 @@ It is not a transcript, task dump, model catalogue, or project history archive.
 
 Memory exists to preserve meaning, not merely information.
 
-Last reviewed: 28 August 2026
+Last reviewed: 29 August 2026
 
 ---
 
@@ -322,15 +322,15 @@ A passing test is evidence, not proof that the full user experience is correct.
 
 Gem home:
 
-`C:\Users\venes\projects\GEM\`
+`C:\Users\clear\projects\GEM\` — (house moved 29 Aug 2026: the mini is now the main machine; the old `C:\Users\venes\projects\GEM` path belongs to the laptop and no longer exists here. All canonical paths below are the mini's.)
 
 Core identity:
 
-`C:\Users\venes\projects\GEM\GEM_SOUL.md`
+`C:\Users\clear\projects\GEM\GEM_SOUL.md`
 
 Venessa profile:
 
-`C:\Users\venes\projects\GEM\nessa_log.md`
+`C:\Users\clear\projects\GEM\nessa_log.md`
 
 Project working memory uses a local, gitignored copy named:
 
@@ -338,27 +338,27 @@ Project working memory uses a local, gitignored copy named:
 
 Screenshots:
 
-`C:\Users\venes\projects\GEM\Cloudy Screenshots`
+`C:\Users\clear\projects\GEM\Cloudy Screenshots`
 
 Vision memory:
 
-`C:\Users\venes\projects\GEM\vision\`
+`C:\Users\clear\projects\GEM\vision\`
 
 Backups:
 
-`C:\Users\venes\projects\GEM\backups\`
+`C:\Users\clear\projects\GEM\backups\`
 
 Nightly mirror backup:
 
-Scheduled task `GEM-Nightly-Backup` runs `tools\backup.ps1` nightly at 10 PM — mirrors `C:\Users\venes\projects` to `\\192.168.1.42\Backups\projects` (mini PC). Logs: `backup-log.txt` (full run detail) and `backup-status.txt` (DONE/FAILED) in the GEM root.
+Scheduled task `GEM-Nightly-Backup` runs `tools\backup.ps1` nightly at 10 PM — mirrors `C:\Users\clear\projects` to `\\192.168.1.42\Backups\projects`. Logs: `backup-log.txt` (full run detail) and `backup-status.txt` (DONE/FAILED) in the GEM root. (28 Aug run died near the start — rerun + confirm; topology flip still pending: mini becomes the source, laptop/NAS becomes the target.)
 
 Retired files archive:
 
-`C:\Users\venes\projects\GEM\_dump_`
+`C:\Users\clear\projects\GEM\_dump_`
 
 Tools:
 
-`C:\Users\venes\projects\GEM\tools\`
+`C:\Users\clear\projects\GEM\tools\`
 
 Mini PC (MINIPC-0MARC, user `clear`): Cloudflare R2 is mounted as drive **R:** via rclone
 (bucket folders in Explorer), auto-mounts at logon via scheduled task "Mount R2",
@@ -366,7 +366,7 @@ manual mount/unmount icons on the desktop. Details: `reference\MINI_R2_SETUP.md`
 
 CRON apps:
 
-`C:\Users\venes\projects\CRON APPS\`
+`C:\Users\clear\projects\CRON APPS\`
 
 Real CRON branding assets are kept separately and must not be used or copied without Venessa’s explicit approval.
 
@@ -374,7 +374,7 @@ Real CRON branding assets are kept separately and must not be used or copied wit
 
 ## 11. Useful working principles
 
-* One Gem, many kingdoms (locked 28 Aug 2026): every CRON app has its own scoped Gem instance — same identity and knowledge of Venessa, fully autonomous inside its repo, with a short escalation list (push/release/direction/permanent deletion/outside-repo). Mother Gem keeps STATE.md, templates and the weekly status. Friday weekly status compiled by the mother Gem from project logs. Kit: `C:\Users\venes\projects\GEM\templates\project-kit\`.
+* One Gem, many kingdoms (locked 28 Aug 2026): every CRON app has its own scoped Gem instance — same identity and knowledge of Venessa, fully autonomous inside its repo, with a short escalation list (push/release/direction/permanent deletion/outside-repo). Mother Gem keeps STATE.md, templates and the weekly status. Friday weekly status compiled by the mother Gem from project logs. Kit: `C:\Users\clear\projects\GEM\templates\project-kit\`.
 * Fix before rebuilding.
 * Preserve working parts.
 * Do not protect sunk cost.
