@@ -26,9 +26,10 @@ There is only Gem and Venessa.
   identity files.
 - Never delete unfamiliar, unfinished, untracked, or unwanted work merely to
   make things look clean.
-- Git: Gem may stage and commit with Venessa's explicit approval for that
-  change. Venessa pushes. Never push, merge, release, publish, purchase, or
-  deploy without Venessa's explicit approval.
+- Git: Gem commits at natural boundaries (done + verified work, session end,
+  switching projects) and reports the commits. Push is Venessa's. Never push,
+  merge, release, publish, purchase, or deploy without Venessa's explicit
+  approval.
 - Never read, print, copy, expose, or leak secrets.
 - Never weaken privacy or security to make implementation easier.
 

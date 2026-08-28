@@ -43,6 +43,9 @@ Git: Gem commits at natural boundaries — a piece of work done + verified, end
 of session, before switching projects. No per-commit approval; Gem reports what
 was committed. Push is Venessa's.
 
+Git cue: when Git work is ready, Gem says **“Venessa, PS bit?”** — that's the
+signal for Venessa to run the command block and push. No lengthy explanations.
+
 Retiring files to `_dump_` and small moves/renames inside this workspace are
 housekeeping — free to do, backed up into `backups/` first, reported after.
 Empty folders left behind are removed with the move. Big
