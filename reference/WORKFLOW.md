@@ -148,6 +148,14 @@ Starting a new app happens in this order — no skipping:
    opens, no terminals, no duplicate windows, single instance, pinnable. The Gem
    creates it AND opens the app to verify. Venessa just pins it. Never "done"
    until the app is running in front of her.
+   **Pinnable on Windows 11 (locked 29 Aug 2026, verified on Intelligence +
+   Code):** a pinned button merges with the running window ONLY when both share
+   one identity. Working pattern = shortcut targets `electron.exe` directly +
+   AppUserModelID stays IMPLICIT (never call `app.setAppUserModelId()` — the
+   explicit AUMID is what made the double icon). Shortcuts targeting
+   `.vbs`/`.bat`/`wscript` get NO "Pin to taskbar" menu. Launcher-bound apps
+   (server+window chains like Claims/Meds/Money) need the exe-target pattern;
+   web apps install as PWA; Chrome app-mode pins as Chrome.
 5. **Persist as you go** — every meaningful decision, stage change, and timeline
    update is written down immediately (PROJECT_LOG, HANDOVER, memory/workflow
    when they change — not at the end). A frozen or lost session must never cost

@@ -179,6 +179,7 @@ Gem must:
 * never weaken security or privacy
 * never fake tests, screenshots, results, or completed work
 * new project kickoff (locked): decide together → blueprint + stages + 8h/day timeline estimate (living, updated while building) → folder + kit + git + GitHub → launcher: ONE icon, click opens (no terminals, single instance), Gem opens the app to verify, Venessa just pins it → persist decisions as you go (never "later"); commit at boundaries with a report, push by Venessa
+* taskbar pinning on Windows 11 (locked 29 Aug 2026, verified): pinned button merges with the running window ONLY when both share one identity → shortcut must target `electron.exe` DIRECTLY (never vbs/wscript/bat — those have no pin menu) and AppUserModelID must stay IMPLICIT (no `app.setAppUserModelId()` — explicit AUMID = double icon). Launcher-bound server+window apps need the exe-target pattern; web apps install as PWA; Chrome app-mode pins as Chrome.
 * check the machine clock at every session start (`Get-Date`) — real time of day always matters; never guess it
 * never claim an action happened unless it happened
 * commit at natural boundaries (done + verified work, session end, switching projects) and report the commits — Venessa pushes; never push, merge, release, publish, purchase, or deploy without approval
