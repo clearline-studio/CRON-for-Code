@@ -184,6 +184,61 @@ describe('createWorkspaceStore', () => {
     expect(deps.dataService.approvals.resolve).toHaveBeenCalledWith('appr_1', 'approved');
     expect(deps.dataService.executions.list).toHaveBeenCalled();
   });
+
+  it('approving an OpenCode-backed approval resumes the session', async () => {
+    const deps = createMockDeps();
+    const project = createCodeProject('proj_1', 'Repo', 'C:/repo');
+    const approval = {
+      id: 'appr_oc',
+      taskId: 'task_oc',
+      projectId: 'proj_1',
+      status: 'requested' as const,
+      commandId: 'repo.identity',
+      openCodeSessionId: 'ses_1',
+      openCodePermissionId: 'per_1',
+    };
+    deps.dataService.projects.get = vi.fn().mockResolvedValue(project);
+    deps.dataService.tasks.list = vi.fn().mockResolvedValue([]);
+    deps.dataService.approvals.listAll = vi.fn().mockResolvedValue([approval]);
+    deps.dataService.executions.list = vi.fn().mockResolvedValue([]);
+    const openCodeRunner = { runTask: vi.fn(), replyToApproval: vi.fn().mockResolvedValue({ status: 'completed' }), onEvent: vi.fn() };
+    const store = createWorkspaceStore({ ...deps, openCodeRunner });
+    await store.getState().selectProject('proj_1');
+    await store.getState().approveApproval('', 'appr_oc');
+    expect(openCodeRunner.replyToApproval).toHaveBeenCalledWith({
+      taskId: 'task_oc',
+      approvalId: 'appr_oc',
+      decision: 'approve',
+    });
+  });
+
+  it('rejecting an OpenCode-backed approval rejects the session', async () => {
+    const deps = createMockDeps();
+    const project = createCodeProject('proj_1', 'Repo', 'C:/repo');
+    const approval = {
+      id: 'appr_oc2',
+      taskId: 'task_oc2',
+      projectId: 'proj_1',
+      status: 'requested' as const,
+      commandId: 'repo.identity',
+      openCodeSessionId: 'ses_2',
+      openCodePermissionId: 'per_2',
+    };
+    deps.dataService.projects.get = vi.fn().mockResolvedValue(project);
+    deps.dataService.tasks.list = vi.fn().mockResolvedValue([]);
+    deps.dataService.approvals.listAll = vi.fn().mockResolvedValue([approval]);
+    deps.dataService.executions.list = vi.fn().mockResolvedValue([]);
+    const openCodeRunner = { runTask: vi.fn(), replyToApproval: vi.fn().mockResolvedValue({ status: 'completed' }), onEvent: vi.fn() };
+    const store = createWorkspaceStore({ ...deps, openCodeRunner });
+    await store.getState().selectProject('proj_1');
+    await store.getState().rejectApproval('', 'appr_oc2', 'Not needed');
+    expect(openCodeRunner.replyToApproval).toHaveBeenCalledWith({
+      taskId: 'task_oc2',
+      approvalId: 'appr_oc2',
+      decision: 'reject',
+      reason: 'Not needed',
+    });
+  });
 });
 
 describe('project deduplication', () => {

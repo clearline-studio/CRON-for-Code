@@ -495,6 +495,16 @@ export function createWorkspaceStore(deps: {
     async approveApproval(_taskId, approvalId) {
       try {
         await dataService.approvals.resolve(approvalId, 'approved');
+        const approval = get().approvals.find((candidate) => candidate.id === approvalId);
+        if (approval?.openCodeSessionId && approval?.openCodePermissionId && deps.openCodeRunner) {
+          // Resume the OpenCode session — resolving the DB record alone leaves
+          // the governed task stuck at approval_required.
+          await deps.openCodeRunner.replyToApproval({
+            taskId: approval.taskId,
+            approvalId,
+            decision: 'approve',
+          });
+        }
         await get().refreshTasks();
         await get().refreshApprovals();
         await get().refreshExecutions();
@@ -508,6 +518,15 @@ export function createWorkspaceStore(deps: {
     async rejectApproval(_taskId, approvalId, reason) {
       try {
         await dataService.approvals.resolve(approvalId, 'rejected', reason);
+        const approval = get().approvals.find((candidate) => candidate.id === approvalId);
+        if (approval?.openCodeSessionId && approval?.openCodePermissionId && deps.openCodeRunner) {
+          await deps.openCodeRunner.replyToApproval({
+            taskId: approval.taskId,
+            approvalId,
+            decision: 'reject',
+            reason: reason ?? 'Rejected in CRON for Code',
+          });
+        }
         await get().refreshTasks();
         await get().refreshApprovals();
         await get().refreshExecutions();

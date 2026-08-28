@@ -199,7 +199,9 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
       {
         title: input.task.title || 'CRON Code task',
         agent: 'build',
-        model: { providerID: model.providerID, id: model.modelID },
+        // Session requests use the same model key as message sends: `modelID`
+        // (fixed 29 Aug — was `id`, which a live server rejects).
+        model: { providerID: model.providerID, modelID: model.modelID },
         metadata: {
           cronTaskId: input.task.id,
           cronProjectId: input.project.id,

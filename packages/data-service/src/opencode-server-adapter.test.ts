@@ -71,8 +71,8 @@ async function startMockOpenCodeServer(): Promise<MockOpenCodeServer> {
     };
 
     if (req.method === 'POST' && url.pathname === '/session') {
-      const parsed = body as { model?: { providerID?: string; id?: string } };
-      if (!parsed?.model?.providerID || !parsed?.model?.id) {
+      const parsed = body as { model?: { providerID?: string; modelID?: string } };
+      if (!parsed?.model?.providerID || !parsed?.model?.modelID) {
         return send(400, { _tag: 'BadRequest' });
       }
       sessionId = 'ses_mock_1';
@@ -211,7 +211,7 @@ describe('OpenCode server adapter (verified installed API)', () => {
       const sessionPost = mock.requests.find((r) => r.method === 'POST' && r.url.startsWith('/session?'));
       const messagePost = mock.requests.find((r) => r.method === 'POST' && r.url.includes('/message?'));
       const permissionGet = mock.requests.find((r) => r.method === 'GET' && r.url.startsWith('/permission?'));
-      expect(sessionPost?.body).toMatchObject({ model: { providerID: 'deepseek', id: 'deepseek-v4-flash' } });
+      expect(sessionPost?.body).toMatchObject({ model: { providerID: 'deepseek', modelID: 'deepseek-v4-flash' } });
       expect(messagePost?.body).toMatchObject({ model: { providerID: 'deepseek', modelID: 'deepseek-v4-flash' } });
       expect(permissionGet?.url).toContain('directory=');
 
