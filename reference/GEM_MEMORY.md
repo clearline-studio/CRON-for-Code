@@ -351,7 +351,7 @@ Backups:
 
 Nightly mirror backup:
 
-Scheduled task `GEM-Nightly-Backup` runs `tools\backup.ps1` nightly at 10 PM — mirrors `C:\Users\clear\projects` to `\\192.168.1.42\Backups\projects`. Logs: `backup-log.txt` (full run detail) and `backup-status.txt` (DONE/FAILED) in the GEM root. (28 Aug run died near the start — rerun + confirm; topology flip still pending: mini becomes the source, laptop/NAS becomes the target.)
+Scheduled task `GEM-Nightly-Backup` (registered on the MINI 29 Aug, 10 PM daily, StartIfAvailable + WakeToRun) runs `tools\backup.ps1` — mirrors `C:\Users\clear\projects` to **R2** `R:\clearline-studio-venessa\Backups\projects` (primary — verified 29 Aug, 2,652 files) and to the laptop `\\192.168.1.41\Backups\projects` (LAN mirror — share NOT created on the laptop yet; needs a "Backups" share there). Logs: `backup-log.txt` (robocopy detail per target) and `backup-status.txt` (per-target DONE/FAILED/SKIPPED + OVERALL) in the GEM root. The old laptop-side task (laptop→mini direction) should be DISABLED by Venessa when the laptop is next awake.
 
 Retired files archive:
 
