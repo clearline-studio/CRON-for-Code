@@ -368,6 +368,8 @@ CRON apps:
 
 `C:\Users\clear\projects\CRON APPS\`
 
+Vendored chat-core/contracts dists are gitignored (fresh-machine flow, verified 29 Aug 2026: clone `clearline-studio/CRON-for-Chat` branch `codex/chat-accepted-slices` → `pnpm install` → build contracts + core → copy `dist/` into Bok + Intelligence `vendor/`; those repos also need `zod` installed and `node_modules\electron\install.js` (postinstall skipped on copied trees) + `npm run build` before launch). WARNING: Chat `main` is a rewritten threads/transport API — its core dist does NOT match the vendored consumers (no `clearAttachments`; Intelligence's ChatWorkspace needs it — blue screen after splash, fixed 29 Aug). Always vendor from `codex/chat-accepted-slices` until the consumers are ported to main's API.
+
 Real CRON branding assets are kept separately and must not be used or copied without Venessa’s explicit approval.
 
 ---
