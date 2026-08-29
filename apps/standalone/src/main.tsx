@@ -9,9 +9,7 @@ import '@cron-code/design-tokens';
 
 import shellBgUrl from '../branding/assets/cron_shell_background.png';
 import logoUrl from '../branding/assets/code_logo_transparent.png';
-// Locked spec §5: the small (505 KB) loop — the full-size loop stalls the top bar on load.
 import logoVideoUrl from '../branding/assets/cron_logo_loop_small.mp4';
-import flashVideoUrl from '../branding/assets/code_flash.mp4';
 
 async function performProjectAction(action: HostProjectAction): Promise<HostProjectActionResult> {
   switch (action.kind) {
@@ -57,7 +55,6 @@ async function bootstrap() {
   rootEl.style.setProperty('--cron-shell-bg-image', `url(${JSON.stringify(shellBgUrl).slice(1, -1)})`);
   rootEl.style.setProperty('--cron-logo-url', `url(${JSON.stringify(logoUrl).slice(1, -1)})`);
   rootEl.style.setProperty('--cron-logo-video-url', `url(${JSON.stringify(logoVideoUrl).slice(1, -1)})`);
-  rootEl.style.setProperty('--cron-flash-video-url', `url(${JSON.stringify(flashVideoUrl).slice(1, -1)})`);
   // Post-restart instances (relaunched by dev.mjs) carry restartHandoff in the
   // runtime marker; the renderer keeps the Restarting overlay visible from
   // first paint until the app is ready.
@@ -112,24 +109,12 @@ async function bootstrap() {
   // new window's first paint is continuous (one identical centered panel).
   const splash = document.getElementById('splash');
   if (splash && startupRestartHandoff) {
-    const splashVideo = document.getElementById('splash-media') as HTMLVideoElement | null;
-    if (splashVideo) {
-      splashVideo.src = flashVideoUrl;
-      void splashVideo.play().catch(() => undefined);
-    }
     const title = document.getElementById('splash-title');
     const message = document.getElementById('splash-message');
     const note = document.getElementById('splash-note');
     if (title) title.textContent = 'Restarting';
     if (message) message.textContent = 'Stopping and restarting CRON services...';
     if (note) note.textContent = 'The app will return to the project selection screen.';
-  } else if (splash) {
-    // Initial launch: play the flash video for the splash hold duration.
-    const splashVideo = document.getElementById('splash-media') as HTMLVideoElement | null;
-    if (splashVideo) {
-      splashVideo.src = flashVideoUrl;
-      void splashVideo.play().catch(() => undefined);
-    }
   }
 
   // React's initial commit is synchronous; the root DOM is fully built by now.
