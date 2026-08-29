@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { Bell, CircleQuestionMark, FolderOpen, Loader2, MessageSquarePlus, Mic, RefreshCw, Settings, X } from 'lucide-react';
+import { Bell, CircleQuestionMark, FolderOpen, Loader2, MessageSquarePlus, RefreshCw, Settings, X } from 'lucide-react';
 import type { DataService } from '@cron-code/data-service';
 import { useWorkspaceStore, useWorkspaceStoreRaw } from '../context.js';
 import type { FolderPickerBridge } from '../folder-picker.js';
@@ -51,6 +51,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
   const activeProject = activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null;
   const pendingApprovalCount = approvals.filter((approval) => approval.status === 'requested').length;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [llmConfig, setLlmConfig] = useState<LlmConfig | null>(null);
   const [chatSessionId, setChatSessionId] = useState('default');
@@ -120,15 +121,11 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
   }
 
   function toggleLeftTab(tab: LeftTabId) {
-    // Create New is an ACTION (the existing New-Project flow) and Settings is an
-    // ACTION (ModelSettings), never panels. Centre tabs switch the centre
-    // content and close any open panel. Projects opens the shared slot.
+    // Create New is an ACTION (the existing New-Project flow), never a panel.
+    // Centre tabs switch the centre content and close any open panel. Projects
+    // opens the shared slot. Settings lives in the top bar now, not the rail.
     if (tab === 'create-new') {
       onSelectProject();
-      return;
-    }
-    if (tab === 'settings') {
-      setSettingsOpen(true);
       return;
     }
     if (CENTRE_VIEW_TABS.includes(tab)) {
@@ -149,11 +146,10 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
 
   const leftActive: LeftTabId | null = leftPanel ?? centreView;
 
-  // Design polish — the oryx/shell background appears only on the Home screen
-  // (Home centre view or no project open). Every other screen (Templates, My
-  // Apps, Deployments, Learn, project conversation) gets a subtle blue radial
-  // glow ambience instead: no oryx image, brighter glow, lighter dim layer.
-  const showOryxBackdrop = centreView === 'home' || !activeProjectId;
+  // Design polish — the oryx/shell background appears consistently on every
+  // screen so the app reads as one uniform visual family (Intelligence-style).
+  // No more per-screen split between oryx and a plain blue glow.
+  const showOryxBackdrop = true;
 
   function renderCentre() {
     if (centreView === 'templates') {
@@ -186,9 +182,14 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
       <div style={showOryxBackdrop ? appStyle : glowAppStyle}>
         <ErrorBanner />
         <header style={topBarStyle} data-testid="workspace-topbar">
-          <span style={brandStyle} data-testid="topbar-brand"><span style={brandWordStyle}>CRON</span> <span style={brandAccentStyle}>for Code</span></span>
+          <div style={brandBlockStyle} data-testid="topbar-brand">
+            <LogoHeader />
+            <div style={brandCopyStyle}>
+              <span style={brandWordStyle}><span style={brandWordCronStyle}>CRON</span> <span style={brandWordCodeStyle}>for Code</span></span>
+              <span style={brandSubtitleStyle}>GOVERNED CODING WORKSPACE</span>
+            </div>
+          </div>
           <div style={buildModeStyle}>
-            <span style={buildModeLabelStyle}>Build mode:</span>
             <div style={buildModePillStyle} role="status" data-testid="cron-online-status">
               <span style={greenDotStyle} />
               OpenCode (local)
@@ -198,7 +199,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
             <span style={activeSessionStyle}>{chatSessionId === 'default' ? activeProject?.name ?? 'No project selected' : 'New session'}</span>
             {activeProject && <span style={sessionMetaStyle}>{activeProject.rootPath}</span>}
           </div>
-          <button type="button" onClick={startNewSession} style={sessionButtonStyle}><MessageSquarePlus size={14} /> New Session</button>
+          <button type="button" onClick={startNewSession} style={sessionButtonStyle} aria-label="New Session" data-testid="new-session-button"><MessageSquarePlus size={16} /></button>
           <button
             type="button"
             onClick={handleRestart}
@@ -211,8 +212,30 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
           >
             {isRestarting ? <Loader2 size={16} style={spinnerStyle} /> : <RefreshCw size={16} />}
           </button>
-          <button type="button" onClick={() => setSettingsOpen(true)} style={iconButtonStyle} aria-label="Open settings"><Settings size={16} /></button>
-          <button type="button" onClick={() => openCentreView('learn')} style={iconButtonStyle} aria-label="Help" title="Help" data-testid="help-button"><CircleQuestionMark size={16} /></button>
+          <div style={settingsWrapStyle}>
+            <button
+              type="button"
+              onClick={() => setSettingsMenuOpen((current) => !current)}
+              style={iconButtonStyle}
+              aria-expanded={settingsMenuOpen}
+              aria-haspopup="true"
+              aria-label="Settings"
+              title="Settings"
+              data-testid="settings-menu-button"
+            >
+              <Settings size={16} />
+            </button>
+            {settingsMenuOpen && (
+              <div style={settingsMenuStyle} role="menu" data-testid="settings-menu">
+                <button type="button" role="menuitem" style={settingsMenuItemStyle} onClick={() => { setSettingsMenuOpen(false); setSettingsOpen(true); }} data-testid="settings-menu-item-settings">
+                  <Settings size={15} /> <span>Settings</span>
+                </button>
+                <button type="button" role="menuitem" style={settingsMenuItemStyle} onClick={() => { setSettingsMenuOpen(false); setCentreView('learn'); setLeftPanel(null); }} data-testid="settings-menu-item-help">
+                  <CircleQuestionMark size={15} /> <span>Help</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => setRightTab('review')}
@@ -226,19 +249,17 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
               <span style={bellBadgeStyle} data-testid="notification-badge">{pendingApprovalCount}</span>
             )}
           </button>
-          <button type="button" disabled style={speakButtonStyle} title="Speak to CRON — coming soon" aria-disabled="true" aria-label="Speak to CRON — coming soon" data-testid="speak-to-cron"><Mic size={14} /> Speak to CRON</button>
+          <ProfileAvatar />
         </header>
 
         <main style={workspaceStyle} data-testid="opencode-style-workspace">
           <div style={leftRegionStyle}>
-            <LogoHeader />
             <div style={leftRegionBodyStyle}>
               <LeftTabStrip active={leftActive} onToggle={toggleLeftTab} onOpenReview={() => setRightTab('review')} />
               {leftPanel === 'projects' && !leftPanelCollapsed && (
                 <ProjectBrowser onNewProject={onSelectProject} onSelectProject={(projectId) => void chooseProject(projectId)} onViewAll={openProjectsView} />
               )}
             </div>
-            <ProfileAvatar />
           </div>
           <section style={centrePaneStyle} data-testid="centre-pane">
             {renderCentre()}
@@ -301,22 +322,27 @@ const glowBackdropStyle: CSSProperties = { position: 'absolute', inset: 0, backg
 const appBaseStyle: CSSProperties = { position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
 const appStyle: CSSProperties = { ...appBaseStyle, background: 'linear-gradient(to bottom, rgba(5, 8, 18, 0.88), rgba(5, 8, 18, 0.94))' };
 const glowAppStyle: CSSProperties = { ...appBaseStyle, background: 'linear-gradient(to bottom, rgba(5, 8, 18, 0.56), rgba(5, 8, 18, 0.72))' };
-const topBarStyle: CSSProperties = { height: 40, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px', borderBottom: '1px solid rgba(100,160,255,.2)', background: 'rgba(2, 9, 23, 0.9)', boxSizing: 'border-box' };
-const brandStyle: CSSProperties = { flexShrink: 0, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.3, whiteSpace: 'nowrap', color: '#eaf2ff', paddingRight: 2 };
-const brandWordStyle: CSSProperties = { color: '#eaf2ff' };
-const brandAccentStyle: CSSProperties = { color: '#1F82FF', fontWeight: 600 };
+const topBarStyle: CSSProperties = { height: 74, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px 0 26px', borderBottom: '1px solid #143152', background: '#040b18', boxSizing: 'border-box' };
+const brandBlockStyle: CSSProperties = { flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 };
+const brandCopyStyle: CSSProperties = { flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 };
+const brandSubtitleStyle: CSSProperties = { flexShrink: 0, fontSize: 9, fontWeight: 600, letterSpacing: 2.2, whiteSpace: 'nowrap', color: 'rgba(140, 180, 230, 0.72)', textTransform: 'uppercase', paddingLeft: 1 };
+const brandWordStyle: CSSProperties = { flexShrink: 0, fontSize: 22, fontWeight: 800, letterSpacing: 0, whiteSpace: 'nowrap', color: '#ffffff', paddingRight: 2, display: 'flex', alignItems: 'baseline', gap: 7 };
+const brandWordCronStyle: CSSProperties = { color: '#45ccff' };
+const brandWordCodeStyle: CSSProperties = { color: '#ffffff' };
 const buildModeStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 };
-const buildModeLabelStyle: CSSProperties = { color: '#8da4c7', fontSize: 10.5, whiteSpace: 'nowrap' };
-const buildModePillStyle: CSSProperties = { height: 22, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 9px', border: '1px solid rgba(34,197,94,.32)', borderRadius: 999, background: 'rgba(20,83,45,.2)', color: '#9ee6b2', fontSize: 10.5, whiteSpace: 'nowrap' };
-const greenDotStyle: CSSProperties = { width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,.7)', flexShrink: 0 };
-const iconButtonStyle: CSSProperties = { width: 28, height: 28, display: 'grid', placeItems: 'center', flexShrink: 0, border: '1px solid rgba(100,160,255,.28)', borderRadius: 6, background: 'rgba(10, 26, 52, .62)', color: '#b7cdf0', cursor: 'pointer' };
+const buildModePillStyle: CSSProperties = { height: 38, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1px solid #1c4268', borderRadius: 8, background: '#071427', color: '#d7e9ff', fontSize: 12, whiteSpace: 'nowrap' };
+const greenDotStyle: CSSProperties = { width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,.7)', flexShrink: 0 };
+const iconButtonStyle: CSSProperties = { width: 38, height: 38, display: 'grid', placeItems: 'center', flexShrink: 0, border: '1px solid #1c4268', borderRadius: 8, background: '#071427', color: '#d7e9ff', cursor: 'pointer' };
 const bellButtonStyle: CSSProperties = { ...iconButtonStyle, position: 'relative' };
+// Intelligence-style Settings dropdown (gear + label + chevron -> menu).
+const settingsWrapStyle: CSSProperties = { position: 'relative', flexShrink: 0 };
+const settingsMenuStyle: CSSProperties = { position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 60, minWidth: 168, display: 'flex', flexDirection: 'column', padding: 6, border: '1px solid rgba(61,114,169,.6)', borderRadius: 10, background: 'rgba(6, 16, 30, 0.98)', boxShadow: '0 14px 40px rgba(0,0,0,.5)' };
+const settingsMenuItemStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px', border: 0, borderRadius: 7, background: 'transparent', color: '#d7e9ff', fontSize: 12.5, fontFamily: 'var(--cron-font-family)', cursor: 'pointer', textAlign: 'left' };
 const bellBadgeStyle: CSSProperties = { position: 'absolute', top: -4, right: -4, minWidth: 15, height: 15, display: 'grid', placeItems: 'center', padding: '0 3px', borderRadius: 999, background: '#f59e0b', color: '#1a1206', fontSize: 9, fontWeight: 800, boxShadow: '0 0 8px rgba(245,158,11,.6)' };
-const sessionButtonStyle: CSSProperties = { height: 26, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 9px', border: '1px solid rgba(100,160,255,.28)', borderRadius: 6, background: 'rgba(18, 63, 134, .38)', color: '#d9e8ff', fontFamily: 'var(--cron-font-family)', fontSize: 10.5, cursor: 'pointer', flexShrink: 0 };
-const speakButtonStyle: CSSProperties = { height: 28, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', border: '1px solid rgba(31,130,255,.4)', borderRadius: 6, background: 'linear-gradient(to bottom, #1F82FF, #176BFF)', color: '#ffffff', fontFamily: 'var(--cron-font-family)', fontSize: 11, fontWeight: 600, cursor: 'not-allowed', flexShrink: 0, opacity: 0.45 };
-const sessionTabsStyle: CSSProperties = { flex: 1, minWidth: 0, height: 26, display: 'flex', alignItems: 'center', gap: 8, padding: '0 9px', border: '1px solid rgba(100,160,255,.18)', borderRadius: 6, background: 'rgba(3, 12, 28, .72)' };
-const activeSessionStyle: CSSProperties = { maxWidth: '42%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#f5f9ff', fontSize: 11.5, fontWeight: 700 };
-const sessionMetaStyle: CSSProperties = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#8da4c7', fontSize: 10.5 };
+const sessionButtonStyle: CSSProperties = { height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '0 14px', border: '1px solid #1c4268', borderRadius: 8, background: '#071427', color: '#d7e9ff', fontFamily: 'var(--cron-font-family)', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 };
+const sessionTabsStyle: CSSProperties = { flex: 1, minWidth: 0, height: 38, display: 'flex', alignItems: 'center', gap: 8, padding: '0 13px', border: '1px solid #1c4268', borderRadius: 8, background: '#071427', boxSizing: 'border-box' };
+const activeSessionStyle: CSSProperties = { maxWidth: '42%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#f5f9ff', fontSize: 12, fontWeight: 700 };
+const sessionMetaStyle: CSSProperties = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#7e99b8', fontSize: 11 };
 // The left Projects panel sits as a fixed column between the rail and the chat
 // (Intelligence-style): it flexes the chat wider/narrower, never overlays it.
 // The right panels still float over the centre (Code-specific, no right panel
