@@ -124,11 +124,11 @@ export interface OpenCodeRunnerOptions {
   /** Streams runner events as they occur (used for live/incremental UI activity). */
   readonly onEvent?: (event: OpenCodeRunEvent) => void;
   /**
-   * Max quiet time before an attempt is treated as a stall and retried with the
-   * fallback. A hang produces events then goes silent forever (never throws), so
-   * the launch-failure fallback never fires. This window converts that silent
-   * hang into a launch failure WITHOUT killing genuinely slow builds that keep
-   * emitting heartbeats. Default 120s.
+   * Wall-clock window the PRIMARY model attempt must settle within (completion or
+   * a permission request), else it is treated as a launch failure and retried with
+   * the fallback. Fixes the case where a wedged gateway keeps pinging heartbeats
+   * (which are not progress) and would otherwise spin to the 60-min ceiling. The
+   * known-good fallback attempt is not deadline-bound. Default 120s.
    */
   readonly stallTimeoutMs?: number;
 }
@@ -139,10 +139,9 @@ const DEFAULT_CODING_MODEL = 'opencode-go/deepseek-v4-flash-vision-exp';
 const DEFAULT_FALLBACK_MODEL = 'opencode-go/deepseek-v4-flash';
 const DEFAULT_ESCALATION_MODEL = 'deepseek/deepseek-v4-pro';
 
-// Default stall window before a silent-hanging attempt is treated as a launch
-// failure and retried with the fallback. Generous enough that a slow-but-alive
-// run (which keeps emitting heartbeat events) is never cut, but short enough
-// that a truly wedged gateway doesn't spin for the full 60-min ceiling.
+// Default deadline window for the PRIMARY model attempt. Generous enough that a
+// slow-but-alive run settles, but short enough that a wedged gateway (which keeps
+// pinging heartbeats) falls back instead of spinning to the 60-min ceiling.
 const DEFAULT_STALL_TIMEOUT_MS = 120_000;
 // Sentinel marking an attempt that stalled (produced no progress then went quiet)
 // as a LAUNCH failure, so the fallback retry fires. Distinguished from a legit
@@ -607,35 +606,28 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Rejects if `getLastProgress()` reports no activity within `windowMs`, while the
- * wrapped promise is still unsettled. Uses a non-awaiting poll so it can never be
- * the thing that resolves first in a healthy run. The settling of the wrapped
- * promise always takes precedence (either resolving or rejecting normally).
+ * Rejects a wrapped attempt once the wall-clock window elapses WITHOUT it having
+ * settled. Used ONLY to bound the primary (unreliable) model attempt so a wedged
+ * gateway that keeps pinging heartbeats can't hold it forever. Heartbeats are
+ * "still alive" pings, not progress, so they must NOT extend the window. The
+ * known-good fallback attempt is never sent through this guard.
  */
-async function withStallGuard<T>(
+async function withAttemptDeadline<T>(
   promise: Promise<T>,
-  getLastProgress: () => number,
   windowMs: number,
   stallMessage: string,
 ): Promise<T> {
   if (windowMs <= 0) return promise;
-  let settled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const guard = new Promise<never>((_, reject) => {
-    void (async () => {
-      while (!settled) {
-        if (Date.now() - getLastProgress() >= windowMs) {
-          settled = true;
-          reject(Object.assign(new Error(stallMessage), { launchFailure: true }));
-          return;
-        }
-        await delay(200);
-      }
-    })();
+    timer = setTimeout(() => reject(Object.assign(new Error(stallMessage), { launchFailure: true })), windowMs);
   });
-  return Promise.race([
-    promise.finally(() => { settled = true; }),
-    guard,
-  ]);
+  // Clear the deadline timer if the attempt settles first so it isn't leaked. The
+  // wrapped promise is raced directly (its own rejection is handled by the race),
+  // avoiding an unhandled rejection from a separate finally chain.
+  const settle = (): void => { if (timer) clearTimeout(timer); };
+  void promise.then(settle, settle);
+  return Promise.race([promise, guard]);
 }
 
 function createOpenCodeCliAdapter(executable: string): OpenCodeRunnerAdapter {
@@ -930,7 +922,12 @@ export class OpenCodeRunner {
     let attemptResult: (OpenCodeRunResult & { launchFailure: boolean }) | null = null;
     for (let attemptIndex = 0; attemptIndex < attemptModels.length; attemptIndex += 1) {
       const attemptModel = attemptModels[attemptIndex]!;
-      attemptResult = await this.runAttempt(task, project, repoPath, input, attemptModel, emit, events);
+      // Only the PRIMARY attempt is deadline-bound. The known-good fallback gets a
+      // normal long floor so a genuinely slow build isn't cut. If the primary
+      // doesn't settle (completion OR permission) within the window — even if it
+      // keeps pinging heartbeats — we treat it as a launch failure and fall back.
+      const deadlineMs = attemptIndex === 0 ? this.stallTimeoutMs : 0;
+      attemptResult = await this.runAttempt(task, project, repoPath, input, attemptModel, emit, events, deadlineMs);
       if (!attemptResult.launchFailure) break;
       if (attemptIndex + 1 >= attemptModels.length) break;
       emit({ taskId: task.id, status: 'running', message: 'Primary model could not launch — retrying with the DeepSeek V4 Flash fallback', model: attemptModel, runner: 'opencode' });
@@ -946,6 +943,7 @@ export class OpenCodeRunner {
     model: string,
     emit: (event: Omit<OpenCodeRunEvent, 'timestamp'>) => void,
     events: OpenCodeRunEvent[],
+    deadlineMs = 0,
   ): Promise<OpenCodeRunResult & { launchFailure: boolean }> {
     const executionId = newId('exe');
     await this.dataService.tasks.updateStatus(task.id, 'running');
@@ -953,31 +951,28 @@ export class OpenCodeRunner {
     await this.audit('execution.started', task, executionId, repoPath, null);
 
     try {
-      // Stall guard: a wedged gateway can hang the adapter promise forever without
-      // ever throwing (the launch-failure fallback never fires in that case). We
-      // track the last time the attempt made ANY progress (an event or a result),
-      // and if it goes quiet for the window we reject as a launch failure so the
-      // caller retries once with the fallback model. Slow-but-alive runs keep
-      // emitting heartbeats, so they are never falsely cut.
-      let lastProgressAt = Date.now();
-      const guard = withStallGuard(
-        this.adapter!.run(
-          {
-            task,
-            project,
-            repoPath,
-            request: task.prompt,
-            model,
-            conversationContext: input.conversationContext ?? [],
-          },
-          (event) => {
-            lastProgressAt = Date.now();
-            emit(event);
-          },
-        ),
-        () => lastProgressAt,
-        this.stallTimeoutMs,
-        `${LAUNCH_STALL_ERROR} for ${model} (${this.stallTimeoutMs}ms)`,
+      // Deadline guard (primary attempt only): a wedged gateway can hold the
+      // adapter promise forever while pinging heartbeats — which are "still
+      // alive" pings, NOT progress. The launch-failure fallback never fires on a
+      // thrown error, so a silent-wedge spins until the 60-min ceiling. This sets
+      // a hard window on the primary attempt; if it doesn't settle (completion OR
+      // a permission) it is treated as a launch failure and retried with the
+      // known-good fallback. Slow-but-alive RUNS on the fallback are unbounded.
+      const runPromise = this.adapter!.run(
+        {
+          task,
+          project,
+          repoPath,
+          request: task.prompt,
+          model,
+          conversationContext: input.conversationContext ?? [],
+        },
+        (event) => emit(event),
+      );
+      const guard = withAttemptDeadline(
+        runPromise,
+        deadlineMs,
+        `${LAUNCH_STALL_ERROR} for ${model} (${deadlineMs}ms)`,
       );
       const result = await guard;
       emit({ taskId: task.id, status: 'verifying', message: 'Capturing OpenCode runner result', model, runner: 'opencode' });

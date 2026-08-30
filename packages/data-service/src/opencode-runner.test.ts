@@ -284,9 +284,15 @@ describe('OpenCodeRunner', () => {
       async run(input, onEvent) {
         calls += 1;
         if (calls === 1) {
-          onEvent({ taskId: input.task.id, status: 'running', message: 'session created but gateway is wedged', model: input.model, runner: 'opencode' });
-          // Never settles: simulates a hung gateway long-poll.
+          // Simulate the real wedge: emit "still alive" heartbeats forever but
+          // never surface a permission or complete. Heartbeats are NOT progress,
+          // so the deadline must still fire and fall back.
+          let n = 0;
+          const timer = setInterval(() => {
+            onEvent({ taskId: input.task.id, status: 'running', message: `heartbeat ${n++}: still working`, model: input.model, runner: 'opencode' });
+          }, 50);
           await new Promise(() => {});
+          clearInterval(timer);
         }
         return base.run(input, onEvent);
       },
