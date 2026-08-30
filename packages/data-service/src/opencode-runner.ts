@@ -2,6 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
+import { Agent, fetch as undiciFetch } from 'undici';
 import {
   createAuditRecord,
   createApproval,
@@ -155,7 +156,9 @@ export function discoverOpenCodeCli(): OpenCodeRunnerAdapter | null {
 }
 
 function openCodeExecutableCandidates(): string[] {
-  const candidates = ['opencode'];
+  // Prefer the REAL exe (no cmd wrapper, no shell) — the .cmd is a PS wrapper
+  // that spawns the same exe; with the new dist the wrapper path proved flaky.
+  const candidates: string[] = ['opencode'];
   const appData = process.env.APPDATA;
   if (appData) {
     candidates.unshift(path.join(appData, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe'));
@@ -175,11 +178,19 @@ interface OpenCodeServerSession {
 }
 
 function openCodeServerAuthHeaders(): Record<string, string> {
-  const password = process.env.OPENCODE_SERVER_PASSWORD;
+  // Prefer an explicitly configured credential; otherwise use the per-run
+  // password the runner generates when IT spawns the server (see ensureServer).
+  const password = generatedServerPassword ?? process.env.OPENCODE_SERVER_PASSWORD;
   if (!password) return {};
-  const username = process.env.OPENCODE_SERVER_USERNAME || 'opencode';
+  const username = generatedServerUsername ?? process.env.OPENCODE_SERVER_USERNAME ?? 'opencode';
   return { authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}` };
 }
+
+// Vars set by the running adapter's ensureServer so requests carry the same
+// credential the spawned server was started with (1.18.25 serves require auth;
+// without it every request 401s).
+let generatedServerPassword: string | null = null;
+let generatedServerUsername: string | null = null;
 
 export interface OpenCodeServerAdapterOptions {
   /** Pre-provisioned OpenCode server base URL (skips spawning and health wait). */
@@ -195,11 +206,23 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
   async function ensureServer(cwd: string): Promise<string> {
     if (server) return server.baseUrl;
     const port = await findOpenPort();
+    // Credentials: prefer the environment's (the app can inherit them from its
+    // parent process); otherwise generate one so the spawned server and every
+    // request share it — the 1.18.25 server requires auth either way.
+    if (!generatedServerPassword) {
+      generatedServerPassword = process.env.OPENCODE_SERVER_PASSWORD ?? `cron-${Math.random().toString(36).slice(2, 12)}`;
+      generatedServerUsername = process.env.OPENCODE_SERVER_USERNAME ?? 'opencode';
+    }
     const child = spawn(executable, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
       cwd,
       windowsHide: true,
       shell: executable.endsWith('.cmd'),
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        OPENCODE_SERVER_PASSWORD: generatedServerPassword,
+        OPENCODE_SERVER_USERNAME: generatedServerUsername ?? 'opencode',
+      },
     });
     const launched = { baseUrl: `http://127.0.0.1:${port}`, process: child };
     server = launched;
@@ -235,7 +258,11 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
         messageID: messageId,
         model: { providerID: model.providerID, modelID: model.modelID },
         agent: 'build',
-        parts: [{ type: 'text', text: buildOpenCodePrompt(input) }],
+        // The message text is the RAW task request. The longer CRON wrapper
+        // prompt confused the coding model into verbose inactivity (verified
+        // live 30 Aug: wrapped → zero tokens/no asks for minutes; the bare
+        // request surfaces the permission ask within seconds).
+        parts: [{ type: 'text', text: input.request }],
       },
       openCodeServerAuthHeaders(),
     );
@@ -413,7 +440,9 @@ async function waitForPermissionOrCompletion(
   const startedAt = Date.now();
   let heartbeatCount = 0;
   let lastHeartbeatAt = startedAt;
-  while (Date.now() - startedAt < 10 * 60 * 1000) {
+  // Governed builds can legitimately run long (slow gateway models). 60 min
+  // ceiling; the user cancels via the app's own cancel path.
+  while (Date.now() - startedAt < 60 * 60 * 1000) {
       const permission = await getSessionPermission(baseUrl, sessionId, repoPath);
       if (permission && permission.id !== skipPermissionId) {
         onEvent({ taskId: input.taskId, status: 'awaiting_approval', message: `OpenCode requests ${permission.action} ${permission.resources.join(', ')}`, model: input.model, runner: 'opencode' });
@@ -505,8 +534,25 @@ async function waitForHealth(baseUrl: string): Promise<void> {
   throw new Error('OpenCode server did not become healthy');
 }
 
+// The OpenCode message endpoint is a long-poll: the run may take MINUTES
+// before response headers arrive, and Node's default fetch (undici) has a
+// 300s headers/body timeout — every long run died at ~5min with
+// UNDERR_ERR_HEADERS_TIMEOUT. This dispatcher disables both timeouts
+// (user cancellation via the runner's own cancel path is the control).
+// IMPORTANT: the pool must allow MANY connections — the message long-poll
+// holds its connection for the whole run, and the /permission polling runs
+// concurrently on the same origin. Default pool (1 connection) starves the
+// polls: the run would spin forever in heartbeats without ever surfacing an
+// approval (found the hard way, 30 Aug).
+const SERVER_DISPATCHER = new Agent({
+  connections: 200,
+  headersTimeout: 0,
+  bodyTimeout: 0,
+  connect: { timeout: 10000 },
+});
+
 async function getJson<T>(url: string, headers?: Record<string, string>): Promise<T> {
-  const response = await fetch(url, { headers });
+  const response = await undiciFetch(url, { headers, dispatcher: SERVER_DISPATCHER });
   if (!response.ok) {
     throw new Error(`OpenCode server returned ${response.status} for ${url}`);
   }
@@ -514,10 +560,11 @@ async function getJson<T>(url: string, headers?: Record<string, string>): Promis
 }
 
 async function postJson<T>(url: string, body: unknown, headers?: Record<string, string>): Promise<T> {
-  const response = await fetch(url, {
+  const response = await undiciFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(headers ?? {}) },
     body: JSON.stringify(body),
+    dispatcher: SERVER_DISPATCHER,
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
@@ -918,6 +965,9 @@ export class OpenCodeRunner {
       };
     } catch (error) {
       const err = toExecutionError(error);
+      // A wait-timeout is NOT a launch failure: the session ran fine, it was
+      // just slow. Falling back in that case would double the wait for nothing.
+      const launchFailure = !err.message.includes('Timed out waiting');
       const record = createExecutionRecord({
         id: executionId,
         status: 'failed',
@@ -951,7 +1001,7 @@ export class OpenCodeRunner {
         executionId,
         record,
         approval: null,
-        launchFailure: true,
+        launchFailure,
       };
     }
   }

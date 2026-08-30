@@ -11,7 +11,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -20,7 +22,8 @@
     "format:check": "echo ok"
   },
   "dependencies": {
-    "@cron-code/contracts": "workspace:*"
+    "@cron-code/contracts": "workspace:*",
+    "undici": "^8.10.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
