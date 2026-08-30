@@ -68,7 +68,7 @@ function permissionAdapter(options: {
         taskId: input.taskId,
         status: input.decision === 'approve' ? 'running' : 'cancelled',
         message: `permission ${input.permissionId} answered`,
-        model: 'deepseek/deepseek-v4-flash',
+        model: 'opencode-go/deepseek-v4-flash-vision-exp',
         runner: 'opencode',
       });
       if (input.decision === 'reject') {
@@ -116,7 +116,7 @@ describe('OpenCodeRunner', () => {
     const runner = new OpenCodeRunner({ dataService, adapter: completingAdapter() });
     const result = await runner.runTask({ taskId });
     expect(result.status).toBe('completed');
-    expect(result.model).toBe('deepseek/deepseek-v4-flash');
+    expect(result.model).toBe('opencode-go/deepseek-v4-flash-vision-exp');
     expect(result.runnerInterface).toBe('test');
     expect((await dataService.tasks.get(taskId))?.status).toBe('completed');
     expect((await dataService.executions.listAll())[0].commandId).toBe('opencode.runner');
@@ -229,13 +229,44 @@ describe('OpenCodeRunner', () => {
     expect(result.blocker).toContain('OpenCode execution interface is not available');
   });
 
-  it('uses DeepSeek V4 Flash by default and never silently selects V4 Pro', async () => {
+  it('uses the vision Flash by default (OpenCode gateway) and never silently selects V4 Pro', async () => {
     const taskId = await seed();
     const runner = new OpenCodeRunner({ dataService, adapter: completingAdapter() });
-    expect((await runner.runTask({ taskId })).model).toBe('deepseek/deepseek-v4-flash');
+    expect((await runner.runTask({ taskId })).model).toBe('opencode-go/deepseek-v4-flash-vision-exp');
     const pro = await runner.runTask({ taskId, model: 'deepseek/deepseek-v4-pro' });
     expect(pro.status).toBe('blocked');
     expect(pro.blocker).toContain('explicit escalation approval');
+  });
+
+  it('falls back to DeepSeek V4 Flash when the vision model cannot launch (one retry, honest trail)', async () => {
+    const taskId = await seed();
+    const base = completingAdapter();
+    let calls = 0;
+    const flaky: typeof base = {
+      executable: base.executable,
+      interfaceKind: base.interfaceKind,
+      async run(input, onEvent) {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('LAUNCH_FAILED: model not found: opencode-go/deepseek-v4-flash-vision-exp');
+        }
+        return base.run(input, onEvent);
+      },
+      async replyToPermission(input, onEvent) {
+        return base.replyToPermission!(input, onEvent);
+      },
+    };
+    const runner = new OpenCodeRunner({ dataService, adapter: flaky });
+    const result = await runner.runTask({ taskId });
+    expect(result.status).toBe('completed');
+    expect(result.model).toBe('opencode-go/deepseek-v4-flash');
+    // The fallback event is visible on the trail.
+    expect(result.events.some((event) => /fallback/i.test(event.message))).toBe(true);
+    // Both attempts are recorded honestly; no duplicate approval records.
+    const executions = (await dataService.executions.listAll()).sort((a, b) => a.startedAt - b.startedAt);
+    expect(executions).toHaveLength(2);
+    expect(executions[0]?.status).toBe('failed');
+    expect(executions[1]?.status).toBe('completed');
   });
 
   it('does not add an unrestricted shell path or broaden the safe catalogue', () => {

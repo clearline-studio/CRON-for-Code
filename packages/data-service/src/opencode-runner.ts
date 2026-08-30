@@ -115,12 +115,17 @@ export interface OpenCodeRunnerOptions {
   readonly dataService: DataService;
   readonly adapter?: OpenCodeRunnerAdapter | null;
   readonly defaultModel?: string;
+  /** Model used only if the primary model fails to launch (session-level). */
+  readonly fallbackModel?: string;
   readonly escalationModel?: string;
   /** Streams runner events as they occur (used for live/incremental UI activity). */
   readonly onEvent?: (event: OpenCodeRunEvent) => void;
 }
 
-const DEFAULT_CODING_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_CODING_MODEL = 'opencode-go/deepseek-v4-flash-vision-exp';
+// NOTE: the fallback MUST be a gateway model id — deepseek/deepseek-v4-flash is
+// not a real DeepSeek-API model (400) and the gateway's providerID is opencode-go.
+const DEFAULT_FALLBACK_MODEL = 'opencode-go/deepseek-v4-flash';
 const DEFAULT_ESCALATION_MODEL = 'deepseek/deepseek-v4-pro';
 
 function newId(prefix: string): string {
@@ -691,6 +696,7 @@ export class OpenCodeRunner {
   private readonly dataService: DataService;
   private readonly adapter: OpenCodeRunnerAdapter | null;
   private readonly defaultModel: string;
+  private readonly fallbackModel: string;
   private readonly escalationModel: string;
   private readonly onEvent?: (event: OpenCodeRunEvent) => void;
 
@@ -698,6 +704,7 @@ export class OpenCodeRunner {
     this.dataService = options.dataService;
     this.adapter = options.adapter === undefined ? discoverOpenCodeCli() : options.adapter;
     this.defaultModel = options.defaultModel ?? DEFAULT_CODING_MODEL;
+    this.fallbackModel = options.fallbackModel ?? DEFAULT_FALLBACK_MODEL;
     this.escalationModel = options.escalationModel ?? DEFAULT_ESCALATION_MODEL;
     this.onEvent = options.onEvent;
   }
@@ -787,13 +794,42 @@ export class OpenCodeRunner {
       return block(task, task.projectId, 'OpenCode execution interface is not available on PATH or configured as a headless runner');
     }
 
+    // Model fallback (30 Aug): the primary is the vision Flash via the OpenCode
+    // gateway; if it cannot even LAUNCH a session (gateway/auth/model issue),
+    // retry ONCE with the known-good flash fallback. Only launch-level failures
+    // fall back — permission waits and real tool failures never do.
+    const attemptModels: string[] = [model];
+    if (model === this.defaultModel && this.fallbackModel !== model) {
+      attemptModels.push(this.fallbackModel);
+    }
+
+    let attemptResult: (OpenCodeRunResult & { launchFailure: boolean }) | null = null;
+    for (let attemptIndex = 0; attemptIndex < attemptModels.length; attemptIndex += 1) {
+      const attemptModel = attemptModels[attemptIndex]!;
+      attemptResult = await this.runAttempt(task, project, repoPath, input, attemptModel, emit, events);
+      if (!attemptResult.launchFailure) break;
+      if (attemptIndex + 1 >= attemptModels.length) break;
+      emit({ taskId: task.id, status: 'running', message: 'Primary model could not launch — retrying with the DeepSeek V4 Flash fallback', model: attemptModel, runner: 'opencode' });
+    }
+    return attemptResult!;
+  }
+
+  private async runAttempt(
+    task: Task,
+    project: CodeProject,
+    repoPath: string,
+    input: OpenCodeRunInput,
+    model: string,
+    emit: (event: Omit<OpenCodeRunEvent, 'timestamp'>) => void,
+    events: OpenCodeRunEvent[],
+  ): Promise<OpenCodeRunResult & { launchFailure: boolean }> {
     const executionId = newId('exe');
     await this.dataService.tasks.updateStatus(task.id, 'running');
     emit({ taskId: task.id, status: 'running', message: `OpenCode runner started with ${model}`, model, runner: 'opencode' });
     await this.audit('execution.started', task, executionId, repoPath, null);
 
     try {
-      const result = await this.adapter.run(
+      const result = await this.adapter!.run(
         {
           task,
           project,
@@ -819,7 +855,7 @@ export class OpenCodeRunner {
         projectId: task.projectId,
         approvalId: approval?.approvalId ?? null,
         cwd: repoPath,
-        executable: this.adapter.executable,
+        executable: this.adapter!.executable,
         args: ['<governed-task>'],
         displayCommand: `OpenCode governed runner (${model})`,
         startedAt: Date.now(),
@@ -849,13 +885,14 @@ export class OpenCodeRunner {
         status: outcome.status,
         model,
         runner: 'opencode',
-        runnerInterface: this.adapter.interfaceKind,
+        runnerInterface: this.adapter!.interfaceKind,
         events,
         summary: outcome.summary,
         blocker: outcome.status === 'failed' ? outcome.summary : null,
         executionId,
         record,
         approval,
+        launchFailure: false,
       };
     } catch (error) {
       const err = toExecutionError(error);
@@ -867,7 +904,7 @@ export class OpenCodeRunner {
         projectId: task.projectId,
         approvalId: null,
         cwd: repoPath,
-        executable: this.adapter.executable,
+        executable: this.adapter!.executable,
         args: ['<governed-task>'],
         displayCommand: `OpenCode governed runner (${model})`,
         startedAt: Date.now(),
@@ -885,13 +922,14 @@ export class OpenCodeRunner {
         status: 'failed',
         model,
         runner: 'opencode',
-        runnerInterface: this.adapter.interfaceKind,
+        runnerInterface: this.adapter!.interfaceKind,
         events,
         summary: err.message,
         blocker: null,
         executionId,
         record,
         approval: null,
+        launchFailure: true,
       };
     }
   }

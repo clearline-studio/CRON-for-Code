@@ -248,14 +248,14 @@ describe('CronAssistant', () => {
     expect(screen.getAllByText(/Fix tests/).length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getAllByText('Needs attention').length).toBeGreaterThan(0));
     expect(screen.getAllByTestId('opencode-execution-card')).toHaveLength(1);
-    expect(screen.getByText('Executor: DeepSeek V4 Flash')).toBeTruthy();
+    expect(screen.getByText('Executor: DeepSeek V4 Flash Vision')).toBeTruthy();
     expect(screen.getAllByText('OpenCode unavailable').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Runner interface:/)).toBeNull();
     // The duplicate technical Details list was removed from the normal surface (Part 9):
     // technical evidence lives in Review, never duplicated in the conversational card.
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByText(/No runner events yet\./)).toBeNull();
-    expect(openCodeRunner.runTask).toHaveBeenCalledWith(expect.objectContaining({ model: 'deepseek/deepseek-v4-flash' }));
+    expect(openCodeRunner.runTask).toHaveBeenCalledWith(expect.objectContaining({ model: 'opencode-go/deepseek-v4-flash-vision-exp' }));
   });
 
   it('publishes live activity incrementally as runner events arrive (no bulk dump)', async () => {
@@ -525,6 +525,21 @@ describe('Layout workspace hierarchy', () => {
     // Clicking opens the Review panel (approvals).
     fireEvent.click(shieldNow);
     expect(screen.getByTestId('right-panel-review')).toBeTruthy();
+  });
+
+  it('duplicate-project flag: the notice chip appears and dismisses on click', () => {
+    const { store } = createTestStore();
+    store.setState({
+      projects: [createCodeProject('p1', 'Meds', 'C:/repo')],
+      activeProjectId: 'p1',
+      commands: COMMANDS,
+      notice: 'This folder is already a project here — opened the existing one instead.',
+    });
+    renderWithStore(<Layout onSelectProject={() => undefined} />, store);
+    const chip = screen.getByTestId('project-duplicate-notice');
+    expect(chip.textContent).toMatch(/already a project/i);
+    fireEvent.click(screen.getByLabelText('Dismiss notice'));
+    expect(screen.queryByTestId('project-duplicate-notice')).toBeNull();
   });
 
   it('oryx background is consistent on every screen (Intelligence-style uniform backdrop)', () => {

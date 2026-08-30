@@ -211,8 +211,8 @@ describe('OpenCode server adapter (verified installed API)', () => {
       const sessionPost = mock.requests.find((r) => r.method === 'POST' && r.url.startsWith('/session?'));
       const messagePost = mock.requests.find((r) => r.method === 'POST' && r.url.includes('/message?'));
       const permissionGet = mock.requests.find((r) => r.method === 'GET' && r.url.startsWith('/permission?'));
-      expect(sessionPost?.body).toMatchObject({ model: { providerID: 'deepseek', modelID: 'deepseek-v4-flash' } });
-      expect(messagePost?.body).toMatchObject({ model: { providerID: 'deepseek', modelID: 'deepseek-v4-flash' } });
+      expect(sessionPost?.body).toMatchObject({ model: { providerID: 'opencode-go', modelID: 'deepseek-v4-flash-vision-exp' } });
+      expect(messagePost?.body).toMatchObject({ model: { providerID: 'opencode-go', modelID: 'deepseek-v4-flash-vision-exp' } });
       expect(permissionGet?.url).toContain('directory=');
 
       const reply = await runner.replyToApproval({ taskId, approvalId: first.approval!.approvalId, decision: 'approve' });

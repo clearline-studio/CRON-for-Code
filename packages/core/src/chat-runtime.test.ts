@@ -17,7 +17,7 @@ describe('chat runtime routing (cloud-first, Ollama fallback)', () => {
     expect(DEFAULT_LLM_CONFIG.cloud.baseUrl).toBe('https://api.openrouter.ai/api/v1');
     expect(DEFAULT_LLM_CONFIG.cloud.chatModel).toBe('deepseek/deepseek-v4-flash');
     expect(DEFAULT_LLM_CONFIG.cloud.visionModel).toBe('qwen/qwen-2-vl-7b-instruct');
-    expect(DEFAULT_LLM_CONFIG.cloud.codingModel).toBe('deepseek/deepseek-v4-flash');
+    expect(DEFAULT_LLM_CONFIG.cloud.codingModel).toBe('opencode-go/deepseek-v4-flash-vision-exp');
     expect(DEFAULT_LLM_CONFIG.cloud.escalationModel).toBe('deepseek/deepseek-v4-pro');
     expect(DEFAULT_LLM_CONFIG.ollama.baseUrl).toContain('11434');
     expect(DEFAULT_LLM_CONFIG.ollama.chatModel).not.toHaveLength(0);
@@ -90,7 +90,7 @@ describe('chat runtime routing (cloud-first, Ollama fallback)', () => {
       config: DEFAULT_LLM_CONFIG,
     });
     expect(handoff.title).toContain('OpenCode handoff');
-    expect(handoff.body).toContain('Primary coding model: deepseek/deepseek-v4-flash');
+    expect(handoff.body).toContain('Primary coding model: opencode-go/deepseek-v4-flash-vision-exp');
     expect(handoff.body).toContain('Escalation model: deepseek/deepseek-v4-pro');
     expect(handoff.body).toContain('Do not commit, push, reset, clean');
     expect(handoff.body).not.toMatch(/Flash gets stuck/i);

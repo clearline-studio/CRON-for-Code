@@ -54,7 +54,10 @@ const DEFAULT_MODEL_CONFIG = {
     apiKey: '',
     chatModel: 'deepseek/deepseek-v4-flash',
     visionModel: 'qwen/qwen-2-vl-7b-instruct',
-    codingModel: 'deepseek/deepseek-v4-flash',
+    // Coding model tracks the OpenCode runner default: the vision Flash via the
+    // OpenCode gateway (30 Aug). NOTE: deepseek-v4-flash is a GATEWAY model id,
+    // not a DeepSeek-API model — the old default 400'd against the real server.
+    codingModel: 'opencode-go/deepseek-v4-flash-vision-exp',
     escalationModel: 'deepseek/deepseek-v4-pro',
   },
   ollama: {
@@ -515,13 +518,17 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('context-menu', (_event, params) => {
-    if (!params.isEditable) return;
+    // Context menu in BOTH editable fields and non-editable text (conversation,
+    // cards, panels): the user can right-click → select/copy/paste anywhere.
+    const editable = params.isEditable;
+    const hasSelection = typeof params.selectionText === 'string' && params.selectionText.trim().length > 0;
+    if (!editable && !hasSelection) return;
     const editMenu = Menu.buildFromTemplate([
       { role: 'cut', enabled: params.editFlags.canCut },
-      { role: 'copy', enabled: params.editFlags.canCopy },
+      { role: 'copy', enabled: params.editFlags.canCopy || hasSelection },
       { role: 'paste', enabled: params.editFlags.canPaste },
       { type: 'separator' },
-      { role: 'selectAll', enabled: params.editFlags.canSelectAll },
+      { role: 'selectAll', enabled: params.editFlags.canSelectAll || hasSelection },
     ]);
     editMenu.popup({ window: mainWindow });
   });

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { Bell, CircleQuestionMark, FolderOpen, Loader2, MessageSquarePlus, RefreshCw, Settings, X } from 'lucide-react';
+import { Bell, CircleQuestionMark, FolderOpen, Loader2, MessageSquarePlus, RefreshCw, Settings, TriangleAlert, X } from 'lucide-react';
 import type { DataService } from '@cron-code/data-service';
 import { useWorkspaceStore, useWorkspaceStoreRaw } from '../context.js';
 import type { FolderPickerBridge } from '../folder-picker.js';
@@ -59,7 +59,17 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
   const [rightTab, setRightTab] = useState<RightTabId | null>(null);
   const hadProjectRef = useRef(false);
 
+  const notice = useWorkspaceStore((s) => s.notice);
+  const setNotice = useWorkspaceStore((s) => s.setNotice);
+
   useEffect(() => { if (llm) void llm.getConfig().then(setLlmConfig).catch(() => undefined); }, [llm]);
+
+  // Transient notice (e.g. duplicate-folder flag) auto-dismisses after 6s.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [notice, setNotice]);
 
   // When a project becomes active (folder picker, host event, recent-project
   // click), leave the Home view and land in the workspace so the conversation
@@ -206,6 +216,16 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
           <ProfileAvatar />
         </header>
 
+        {notice && (
+          <div style={noticeChipStyle} role="status" data-testid="project-duplicate-notice">
+            <TriangleAlert size={14} style={{ color: '#fbbf24', flexShrink: 0 }} />
+            <span style={noticeTextStyle}>{notice}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notice" style={noticeCloseStyle}>
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
         <main style={workspaceStyle} data-testid="opencode-style-workspace">
           <div style={leftRegionStyle}>
             <AppSidebar
@@ -271,6 +291,11 @@ function ProjectDrawer({ activeProjectId, onClose, onNewProject, onNewSession, o
 }
 
 const shellStyle: CSSProperties = { height: '100vh', overflow: 'hidden', position: 'relative', background: 'var(--cron-app-bg)', color: '#f5f9ff', fontFamily: 'var(--cron-font-family)', WebkitFontSmoothing: 'antialiased', textRendering: 'optimizeLegibility' };
+// Transient notice chip (e.g. duplicate project flag): floats under the top bar,
+// auto-dismisses, dismissible.
+const noticeChipStyle: CSSProperties = { position: 'absolute', top: 86, left: '50%', transform: 'translateX(-50%)', zIndex: 60, maxWidth: '78%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: '1px solid rgba(125,177,255,.45)', borderRadius: 9, background: 'rgba(9,18,34,.97)', boxShadow: '0 8px 28px rgba(0,0,0,.45)', fontSize: 12, color: '#d9e8ff', fontFamily: 'var(--cron-font-family)' };
+const noticeTextStyle: CSSProperties = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const noticeCloseStyle: CSSProperties = { flexShrink: 0, width: 20, height: 20, display: 'grid', placeItems: 'center', border: 'none', borderRadius: 5, background: 'transparent', color: '#8da4c7', cursor: 'pointer' };
 // Oryx/shell backdrop: only on the Home screen (design polish). Subtle per spec §2.
 const oryxBackdropStyle: CSSProperties = { position: 'absolute', inset: 0, backgroundImage: 'var(--cron-shell-bg-image)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.36 };
 // Blue radial glow ambience for every non-Home screen: no oryx image, brighter glow.

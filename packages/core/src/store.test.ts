@@ -111,6 +111,35 @@ describe('createWorkspaceStore', () => {
     expect(store.getState().error).toBe('Something wrong');
   });
 
+  it('flags a duplicate folder: two concurrent opens of the same path create ONE project and set the notice', async () => {
+    const deps = createMockDeps();
+    let saved: Array<{ id: string; rootPath: string; name: string }> = [];
+    const saveDelay = 8;
+    deps.dataService.projects.save = vi.fn(async (project: { id: string; rootPath: string; name: string }) => {
+      await new Promise((resolve) => setTimeout(resolve, saveDelay));
+      saved = [...saved.filter((p) => p.id !== project.id), project];
+    });
+    deps.dataService.projects.list = vi.fn(async () => saved);
+    deps.dataService.projects.get = vi.fn(async (id: string) => saved.find((p) => p.id === id) ?? null);
+    const store = createWorkspaceStore(deps);
+    // Both fire in the same tick — the old code raced and saved twice.
+    const first = store.getState().openProjectPath('C:/repo', 'Meds');
+    const second = store.getState().openProjectPath('C:/repo', 'Meds');
+    await Promise.all([first, second]);
+    expect(saved).toHaveLength(1);
+    expect(store.getState().notice).toMatch(/already a project/i);
+    expect(store.getState().activeProjectId).toBe(saved[0]?.id ?? null);
+  });
+
+  it('setNotice updates the notice and clears it', () => {
+    const deps = createMockDeps();
+    const store = createWorkspaceStore(deps);
+    store.getState().setNotice('Hello');
+    expect(store.getState().notice).toBe('Hello');
+    store.getState().setNotice(null);
+    expect(store.getState().notice).toBeNull();
+  });
+
   it('updates hostContext', () => {
     const deps = createMockDeps();
     const store = createWorkspaceStore(deps);

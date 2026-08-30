@@ -27,6 +27,8 @@ export interface WorkspaceState {
   copyConfirm: { path: string; at: number } | null;
   /** True while the native folder picker flow is active (CRON-styled wrap). */
   pickerActive: boolean;
+  /** Short visible notice (e.g. "already have this project") — clears itself. */
+  notice: string | null;
 }
 
 export interface WorkspaceActions {
@@ -48,6 +50,7 @@ export interface WorkspaceActions {
   rejectApproval(taskId: string, approvalId: string, reason?: string): Promise<void>;
   setError(error: string | null): void;
   setPickerActive(active: boolean): void;
+  setNotice(notice: string | null): void;
   archiveProject(projectId: string): Promise<void>;
   relinkProject(projectId: string): Promise<void>;
   renameProject(projectId: string, name: string): Promise<void>;
@@ -69,6 +72,20 @@ export type WorkspaceStoreApi = StoreApi<WorkspaceStoreType>;
 export function normalizeProjectPath(rootPath: string): string {
   return rootPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
+
+// Project creation/opening is SERIALIZED: a folder selection can fire twice
+// (picker + host event) in the same tick, and two concurrent add/open calls
+// both pass the dedup check before the first save lands — that created real
+// duplicate projects. This chain makes the second call see the first's record.
+let projectMutationChain: Promise<unknown> = Promise.resolve();
+function enqueueProjectMutation<T>(work: () => Promise<T>): Promise<T> {
+  const queued = projectMutationChain.then(work, work);
+  projectMutationChain = queued.catch(() => undefined);
+  return queued;
+}
+
+const DUPLICATE_PROJECT_NOTICE =
+  'This folder is already a project here — opened the existing one instead.';
 
 export interface ProjectReconciliation {
   projects: CodeProject[];
@@ -188,9 +205,14 @@ export function createWorkspaceStore(deps: {
     // True while the native folder picker flow is active (CRON-styled picker
     // modal wraps the OS dialog so the user stays in app context).
     pickerActive: false,
+    notice: null,
 
     setPickerActive(active) {
       set({ pickerActive: active });
+    },
+
+    setNotice(notice) {
+      set({ notice });
     },
 
     setHostContext(ctx) {
@@ -276,6 +298,8 @@ export function createWorkspaceStore(deps: {
         // Dedup against PERSISTED projects too: the in-memory list can lag behind
         // (e.g. a second selection racing the first open), which previously let
         // duplicate records through. The persisted store is the source of truth.
+        // NOTE: not queued itself — openProjectPath (the entry point) serializes
+        // its own calls, so this is never called concurrently from that path.
         const persisted = await dataService.projects.list();
         const existing =
           get().projects.find(
@@ -290,6 +314,7 @@ export function createWorkspaceStore(deps: {
           if (existing.archived) {
             await dataService.projects.unarchive(existing.id);
           }
+          get().setNotice(DUPLICATE_PROJECT_NOTICE);
           await get().selectProject(existing.id);
           return;
         }
@@ -315,39 +340,42 @@ export function createWorkspaceStore(deps: {
         set({ error: 'Project folder path is missing' });
         return;
       }
-      set({ isLoading: true, error: null });
-      try {
-        const normalized = normalizeProjectPath(rootPath);
-        const persisted = await dataService.projects.list();
-        const existing =
-          get().projects.find(
-            (candidate) => normalizeProjectPath(candidate.rootPath) === normalized,
-          ) ??
-          persisted.find(
-            (candidate) => normalizeProjectPath(candidate.rootPath) === normalized,
-          );
-        if (existing) {
-          if (existing.archived) {
-            const unarchived = await dataService.projects.unarchive(existing.id);
-            if (unarchived) {
-              set((state) => ({
-                projects: state.projects.map((p) => (p.id === existing.id ? unarchived : p)),
-              }));
+      return enqueueProjectMutation(async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const normalized = normalizeProjectPath(rootPath);
+          const persisted = await dataService.projects.list();
+          const existing =
+            get().projects.find(
+              (candidate) => normalizeProjectPath(candidate.rootPath) === normalized,
+            ) ??
+            persisted.find(
+              (candidate) => normalizeProjectPath(candidate.rootPath) === normalized,
+            );
+          if (existing) {
+            if (existing.archived) {
+              const unarchived = await dataService.projects.unarchive(existing.id);
+              if (unarchived) {
+                set((state) => ({
+                  projects: state.projects.map((p) => (p.id === existing.id ? unarchived : p)),
+                }));
+              }
             }
+            get().setNotice(DUPLICATE_PROJECT_NOTICE);
+            await get().selectProject(existing.id);
+            return;
           }
-          await get().selectProject(existing.id);
-          return;
+          const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const project = createCodeProject(id, name ?? 'Project', rootPath);
+          await get().addProject(project);
+        } catch (err) {
+          set({
+            error: err instanceof Error ? err.message : 'Failed to open project',
+          });
+        } finally {
+          set({ isLoading: false });
         }
-        const id = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const project = createCodeProject(id, name ?? 'Project', rootPath);
-        await get().addProject(project);
-      } catch (err) {
-        set({
-          error: err instanceof Error ? err.message : 'Failed to open project',
-        });
-      } finally {
-        set({ isLoading: false });
-      }
+      });
     },
 
     async selectProject(projectId) {
