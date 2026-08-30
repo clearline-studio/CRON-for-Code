@@ -1,7 +1,39 @@
 ﻿
 ---
 
-## 2026-08-29 - Final Home/top-bar polish (3 notes)
+## 2026-08-30 - Intelligence-parity header + sidebar + canvas lock + splash fix
+
+Venessa's live-feedback loop on the running app (she's driving the look, I drive the code):
+
+- **Header (top bar)** — framed logo replaced by the 505KB... no: top-bar logo now the
+  NEW flash-style loop (`code_logo_loop.mp4`, 6.3MB — same size class Intelligence runs;
+  the old "small loop locked" workaround was from an earlier stall that no longer applies).
+  Frameless 40px (Intelligence numbers), wordmark 15px/800 (was 19px — "too big"), subtitle
+  **CODING WORKSPACE** visible at 10px (was `display: none`; "GOVERNED" dropped per Venessa
+  — too long), logo↔wordmark gap tightened to 4px.
+- **Sidebar** — one 256px Intelligence-parity column replacing the old 172px rail +
+  separate Projects panel: New Project button (top), WORKSPACE section rows (Home/Templates/
+  My Apps/Deployments/Learn, 13.5px, blue border rows; active = inset #2ea8ff left edge +
+  glow), glowing divider, PROJECTS section (search, sort recent/name, project rows with
+  per-row meta, "View all projects" → My Apps view), code-safety shield pinned at bottom.
+  All ProjectBrowser behaviors preserved (component still exported + unit-tested).
+- **Canvas lock** — right panel changed from absolute overlay (clipped the canvas) to an
+  in-flow column: the canvas reflows narrower; nothing gets covered. Right strip 44→40px,
+  panel 280→256px. Left 288→256px.
+- **Splash fix** — `#splash-media` (pre-React splash video) never had a `src`; wired
+  `code_flash.mp4` in `main.tsx` bootstrap so the flash plays on the splash hold (~3s).
+- **Button sweep** — audited 91 buttons: 85 wired. Home "Attach a file" paperclip was the
+  only reachable dead button (no file-picker capability) → removed (with dead style).
+  CronNavBar/WorkflowStrip dead buttons are documented legacy (never mounted).
+- **Security sweep** — .gitignore covers .env*/pem/key/credentials*/token; no secrets
+  tracked; repo-stabilisation secret-pattern test green. No creds in this repo.
+- Verified: typecheck ✓ (all 8 projects), lint ✓ clean, full test suite ✓ (223 core
+  + 94 data-service + others), standalone build ✓, app relaunched + captured (PrintWindow
+  shows no video frames — logo/splash video verified by Venessa's eyes).
+- Committed as `70ae861`.
+
+---
+
 
 - Logo bumped to 72px (was 60) in LeftNav.tsx.
 - Hero heading "What do you want to build?" smaller + thinner (22px, weight 200).
