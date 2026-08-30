@@ -429,7 +429,7 @@ describe('Sidebar shell fit', () => {
 });
 
 describe('Layout workspace hierarchy', () => {
-  it('renders the edge-tab shell (persistent logo header | left strip | shared slot | centre | right strip), home is the launch default and projects open once a project is active', () => {
+  it('renders the Intelligence-style shell (persistent logo header | 288px sidebar | centre | right strip), home is the launch default and projects open once a project is active', () => {
     const { store } = createTestStore();
     store.setState({
       projects: [createCodeProject('p1', 'Meds', 'C:/repo')],
@@ -444,22 +444,22 @@ describe('Layout workspace hierarchy', () => {
     expect(screen.getByTestId('topbar-brand')).toBeTruthy();
     expect(screen.getByText('CRON')).toBeTruthy();
     expect(screen.getByText('for Code')).toBeTruthy();
-    expect(screen.getByTestId('left-tab-strip')).toBeTruthy();
-    // All seven labelled edge tabs are present, top to bottom.
-    for (const id of ['home', 'projects', 'create-new', 'templates', 'my-apps', 'deployments', 'learn']) {
-      expect(screen.getByTestId(`left-tab-${id}`)).toBeTruthy();
+    expect(screen.getByTestId('app-sidebar')).toBeTruthy();
+    // The single 288px sidebar: Workspace rows (views) + New Project action.
+    for (const id of ['home', 'templates', 'my-apps', 'deployments', 'learn']) {
+      expect(screen.getByTestId(`nav-row-${id}`)).toBeTruthy();
     }
-    // No Menu tab and no "Files" tab.
-    expect(screen.queryByTestId('left-tab-menu')).toBeNull();
-    expect(screen.queryByTestId('left-tab-files')).toBeNull();
-    // Settings moved to the top bar (not a rail tab).
-    expect(screen.queryByTestId('left-tab-settings')).toBeNull();
+    expect(screen.getByTestId('sidebar-new-project')).toBeTruthy();
+    // Projects is a sidebar SECTION (rows), not a nav row; no Menu/"Files" row.
+    expect(screen.queryByTestId('nav-row-projects')).toBeNull();
+    expect(screen.queryByTestId('nav-row-create-new')).toBeNull();
+    expect(screen.queryByTestId('nav-row-settings')).toBeNull();
     expect(screen.getByTestId('settings-menu-button')).toBeTruthy();
-    // Labeled rail: text labels are visible (Intelligence-style), not icon-only.
-    expect(screen.getByText('Create New')).toBeTruthy();
+    // Labelled sidebar: labels are visible (Intelligence-style), not icon-only.
+    expect(screen.getByText('New Project')).toBeTruthy();
     expect(screen.getByTestId('right-tab-strip')).toBeTruthy();
-    // Projects panel is the default open left panel; the Menu/nav panel is gone.
-    expect(screen.getByTestId('project-browser')).toBeTruthy();
+    // Projects section lists the real project rows (no separate panel).
+    expect(screen.getByTestId('sidebar-project-row-p1')).toBeTruthy();
     expect(screen.queryByTestId('left-nav')).toBeNull();
     // The profile avatar is always visible at the bottom of the left rail and
     // the slim global footer spans the full app width below it.
@@ -477,7 +477,7 @@ describe('Layout workspace hierarchy', () => {
     expect(screen.queryByTestId('review-resizer')).toBeNull();
   });
 
-  it('left rail: Projects opens/closes in the shared slot; the profile avatar and global footer stay visible', () => {
+  it('sidebar: project rows are always visible, selecting one opens the workspace; avatar and global footer stay visible', () => {
     const { store } = createTestStore();
     store.setState({
       projects: [createCodeProject('p1', 'Meds', 'C:/repo')],
@@ -485,22 +485,18 @@ describe('Layout workspace hierarchy', () => {
       commands: COMMANDS,
     });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    // Default: projects open, no Menu/nav panel (the labeled nav list is gone).
-    expect(screen.getByTestId('project-browser')).toBeTruthy();
+    // Projects section is always in the sidebar (no open/close panel state).
+    expect(screen.getByTestId('sidebar-project-row-p1')).toBeTruthy();
     expect(screen.queryByTestId('left-nav')).toBeNull();
-    // The profile avatar and the global footer are always present, independent
-    // of panel state.
+    // The profile avatar and the global footer are always present.
     expect(screen.getByTestId('profile-avatar')).toBeTruthy();
     expect(screen.getByTestId('profile-footer')).toBeTruthy();
-    // Clicking the active Projects tab again closes the panel; centre takes the space.
-    fireEvent.click(screen.getByTestId('left-tab-projects'));
-    expect(screen.queryByTestId('project-browser')).toBeNull();
-    // The profile avatar and global footer stay visible even when the panel is closed.
+    // Selecting a project row lands in the workspace (conversation visible).
+    fireEvent.click(screen.getByTestId('sidebar-project-row-p1'));
+    expect(screen.getByTestId('main-conversation-pane')).toBeTruthy();
+    // Avatar + footer persist through the selection.
     expect(screen.getByTestId('profile-avatar')).toBeTruthy();
     expect(screen.getByTestId('profile-footer')).toBeTruthy();
-    // Projects tab re-opens the project browser.
-    fireEvent.click(screen.getByTestId('left-tab-projects'));
-    expect(screen.getByTestId('project-browser')).toBeTruthy();
   });
 
   it('code-safety shield: green ShieldCheck by default, amber with a count when approvals are pending, and opens Review on click', () => {
@@ -545,7 +541,7 @@ describe('Layout workspace hierarchy', () => {
     backdrop = screen.getByTestId('app-backdrop');
     expect(backdrop.style.backgroundImage).toContain('--cron-shell-bg-image');
     // Templates is a non-Home centre view: still the same oryx backdrop.
-    fireEvent.click(screen.getByTestId('left-tab-templates'));
+    fireEvent.click(screen.getByTestId('nav-row-templates'));
     backdrop = screen.getByTestId('app-backdrop');
     expect(backdrop.style.backgroundImage).toContain('--cron-shell-bg-image');
   });
@@ -577,7 +573,7 @@ describe('Layout workspace hierarchy', () => {
     expect(screen.queryByTestId('profile-popover')).toBeNull();
   });
 
-  it('Create New left tab runs the New-Project flow and never opens a panel', () => {
+  it('New Project sidebar button runs the New-Project flow and never opens a panel', () => {
     const { store } = createTestStore();
     const onSelectProject = vi.fn();
     store.setState({
@@ -586,21 +582,21 @@ describe('Layout workspace hierarchy', () => {
       commands: COMMANDS,
     });
     renderWithStore(<Layout onSelectProject={onSelectProject} />, store);
-    // All seven edge tabs are present.
-    for (const id of ['home', 'projects', 'create-new', 'templates', 'my-apps', 'deployments', 'learn']) {
-      expect(screen.getByTestId(`left-tab-${id}`)).toBeTruthy();
+    // The five Workspace rows + the New Project action are present.
+    for (const id of ['home', 'templates', 'my-apps', 'deployments', 'learn']) {
+      expect(screen.getByTestId(`nav-row-${id}`)).toBeTruthy();
     }
-    // No "Files" tab anywhere on the left edge.
-    expect(screen.queryByTestId('left-tab-files')).toBeNull();
-    // Clicking Create New triggers the existing New-Project flow and leaves the
-    // shared panel slot untouched (Projects stays open; no panel is opened).
-    fireEvent.click(screen.getByTestId('left-tab-create-new'));
+    expect(screen.getByTestId('sidebar-new-project')).toBeTruthy();
+    // No "Files" row anywhere on the left edge.
+    expect(screen.queryByTestId('nav-row-files')).toBeNull();
+    // Clicking New Project triggers the existing New-Project flow; no panel opens.
+    fireEvent.click(screen.getByTestId('sidebar-new-project'));
     expect(onSelectProject).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('project-browser')).toBeTruthy();
+    expect(screen.getByTestId('app-sidebar')).toBeTruthy();
     expect(screen.queryByTestId('left-nav')).toBeNull();
   });
 
-  it('left tabs show persistent labels (Intelligence-style), and Settings opens ModelSettings from the top bar', () => {
+  it('sidebar rows show persistent labels (Intelligence-style), and Settings opens ModelSettings from the top bar', () => {
     const { store } = createTestStore();
     store.setState({
       projects: [createCodeProject('p1', 'Meds', 'C:/repo')],
@@ -608,22 +604,18 @@ describe('Layout workspace hierarchy', () => {
       commands: COMMANDS,
     });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    // Labels are visible directly on the rail (no hover needed).
+    // Labels are visible directly on the sidebar (no hover needed).
     expect(screen.getByText('Home')).toBeTruthy();
     expect(screen.getByText('Projects')).toBeTruthy();
     expect(screen.getByText('Templates')).toBeTruthy();
     expect(screen.getByText('Learn')).toBeTruthy();
-    expect(screen.getByText('Create New')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('left-tab-home'));
-    // The hover flyout still reveals the plain section name (labelled rail).
-    fireEvent.mouseEnter(screen.getByTestId('left-tab-wrap-learn'));
-    expect(screen.getByTestId('left-tab-label-learn').textContent).toBe('Learn');
-    fireEvent.mouseLeave(screen.getByTestId('left-tab-wrap-learn'));
-    // Home is a centre view: clicking it shows the Home screen and closes the
-    // left panel slot (no panel is opened).
-    fireEvent.click(screen.getByTestId('left-tab-home'));
+    expect(screen.getByText('New Project')).toBeTruthy();
+    // The hover flyout is gone in the labelled sidebar.
+    expect(screen.queryByTestId('left-tab-label-learn')).toBeNull();
+    // Home is a centre view: clicking it shows the Home screen.
+    fireEvent.click(screen.getByTestId('nav-row-home'));
     expect(screen.getByTestId('home-screen')).toBeTruthy();
-    expect(screen.queryByTestId('project-browser')).toBeNull();
+    expect(screen.queryByTestId('main-conversation-pane')).toBeNull();
     expect(screen.queryByTestId('left-nav')).toBeNull();
     // Settings moved to the top bar: the gear menu's Settings item opens ModelSettings.
     fireEvent.click(screen.getByTestId('settings-menu-button'));
@@ -825,14 +817,14 @@ describe('Slice 1 shell components', () => {
     expect(screen.getByText('All Systems Operational')).toBeTruthy();
   });
 
-  it('Layout: Create New runs the existing New-Project flow and Settings opens ModelSettings (top bar)', () => {
+  it('Layout: the New Project sidebar action runs the New-Project flow and Settings opens ModelSettings (top bar)', () => {
     const { store } = createTestStore();
     const onSelectProject = vi.fn();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={onSelectProject} />, store);
-    // No Menu tab / nav panel anymore: Create New is a direct tab, Settings is in the top bar.
-    expect(screen.queryByTestId('left-tab-menu')).toBeNull();
-    fireEvent.click(screen.getByTestId('left-tab-create-new'));
+    // No Menu tab / nav panel anymore: New Project is the sidebar action, Settings is in the top bar.
+    expect(screen.queryByTestId('nav-row-create-new')).toBeNull();
+    fireEvent.click(screen.getByTestId('sidebar-new-project'));
     expect(onSelectProject).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByTestId('settings-menu-button'));
     fireEvent.click(screen.getByTestId('settings-menu-item-settings'));
@@ -850,10 +842,13 @@ describe('Home screen', () => {
     expect(screen.getByTestId('home-screen')).toBeTruthy();
     expect(screen.getByText('What do you want to build?')).toBeTruthy();
     expect(screen.getByPlaceholderText('Describe what you want to build...')).toBeTruthy();
-    expect(screen.getByText('Recent projects')).toBeTruthy();
-    expect(screen.getByText('TaskFlow Dashboard')).toBeTruthy();
-    expect(screen.getByText('Expense Tracker')).toBeTruthy();
-    expect(screen.getByText('Start from a template')).toBeTruthy();
+    // Recent projects: names show on the Home cards (and in the sidebar rows;
+    // scope to the Home screen).
+    const home = within(screen.getByTestId('home-screen'));
+    expect(home.getByText('Recent projects')).toBeTruthy();
+    expect(home.getByText('TaskFlow Dashboard')).toBeTruthy();
+    expect(home.getByText('Expense Tracker')).toBeTruthy();
+    expect(home.getByText('Start from a template')).toBeTruthy();
     expect(screen.getByText('Task dashboard')).toBeTruthy();
     expect(screen.getByText('Invoicing app')).toBeTruthy();
     expect(screen.getByText('Portfolio site')).toBeTruthy();
@@ -865,22 +860,19 @@ describe('Home screen', () => {
     expect(screen.queryByTestId('main-conversation-pane')).toBeNull();
   });
 
-  it('is the default landing: the Home tab is selected and shows Home', () => {
+  it('is the default landing: the Home row is selected and shows Home', () => {
     const { store } = createTestStore();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')] });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    // Home screen is the centre view; Home is a centre view (not a panel), so
-    // the left panel slot is closed by default.
+    // Home screen is the centre view; the sidebar is always present with its
+    // Project section visible (no project needs to be "opened" in a slot).
     expect(screen.getByTestId('home-screen')).toBeTruthy();
-    expect(screen.queryByTestId('project-browser')).toBeNull();
-    // Opening the Projects panel keeps the centre on Home (no project yet).
-    fireEvent.click(screen.getByTestId('left-tab-projects'));
-    expect(screen.getByTestId('project-browser')).toBeTruthy();
+    expect(screen.getByTestId('app-sidebar')).toBeTruthy();
+    expect(screen.getByTestId('sidebar-project-row-p1')).toBeTruthy();
+    expect(screen.queryByTestId('main-conversation-pane')).toBeNull();
+    // The Home row returns to the Home view.
+    fireEvent.click(screen.getByTestId('nav-row-home'));
     expect(screen.getByTestId('home-screen')).toBeTruthy();
-    // The Home tab returns to the Home view and closes the panel.
-    fireEvent.click(screen.getByTestId('left-tab-home'));
-    expect(screen.getByTestId('home-screen')).toBeTruthy();
-    expect(screen.queryByTestId('project-browser')).toBeNull();
   });
 
   it('hero submit and template clicks both open the New-Project picker flow', () => {
@@ -904,7 +896,8 @@ describe('Home screen', () => {
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
     fireEvent.click(screen.getByTestId('home-project-p1'));
     await waitFor(() => expect(screen.getByTestId('main-conversation-pane')).toBeTruthy());
-    expect(screen.getByTestId('project-browser')).toBeTruthy();
+    expect(screen.getByTestId('app-sidebar')).toBeTruthy();
+    expect(screen.getByTestId('sidebar-project-row-p1')).toBeTruthy();
     expect(screen.queryByTestId('home-screen')).toBeNull();
   });
 
@@ -922,12 +915,12 @@ describe('complete screens + buttons', () => {
     const onSelectProject = vi.fn();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={onSelectProject} />, store);
-    fireEvent.click(screen.getByTestId('left-tab-templates'));
+    fireEvent.click(screen.getByTestId('nav-row-templates'));
     expect(screen.getByTestId('templates-screen')).toBeTruthy();
     for (const id of ['task-dashboard', 'invoicing-app', 'portfolio-site', 'internal-tool', 'expense-tracker', 'customer-list']) {
       expect(screen.getByTestId(`template-card-${id}`)).toBeTruthy();
     }
-    expect(screen.queryByTestId('project-browser')).toBeNull();
+    expect(screen.queryByTestId('main-conversation-pane')).toBeNull();
     fireEvent.click(screen.getByTestId('template-card-task-dashboard'));
     expect(onSelectProject).toHaveBeenCalledTimes(1);
   });
@@ -960,7 +953,7 @@ describe('complete screens + buttons', () => {
       commands: COMMANDS,
     });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    fireEvent.click(screen.getByTestId('left-tab-my-apps'));
+    fireEvent.click(screen.getByTestId('nav-row-my-apps'));
     expect(screen.getByTestId('my-apps-screen')).toBeTruthy();
     expect(screen.getAllByText('Built').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Draft').length).toBeGreaterThanOrEqual(1);
@@ -971,7 +964,7 @@ describe('complete screens + buttons', () => {
     const { store } = createTestStore();
     store.setState({ projects: [], commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    fireEvent.click(screen.getByTestId('left-tab-my-apps'));
+    fireEvent.click(screen.getByTestId('nav-row-my-apps'));
     expect(screen.getByTestId('my-apps-screen')).toBeTruthy();
     expect(screen.getByText('No apps yet')).toBeTruthy();
   });
@@ -980,7 +973,7 @@ describe('complete screens + buttons', () => {
     const { store } = createTestStore();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    fireEvent.click(screen.getByTestId('left-tab-deployments'));
+    fireEvent.click(screen.getByTestId('nav-row-deployments'));
     expect(screen.getByTestId('deployments-screen')).toBeTruthy();
     expect(screen.getByText('Nothing deployed yet')).toBeTruthy();
     expect(screen.getByText(/it'll show up here/)).toBeTruthy();
@@ -992,12 +985,12 @@ describe('complete screens + buttons', () => {
     const { store } = createTestStore();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    fireEvent.click(screen.getByTestId('left-tab-learn'));
+    fireEvent.click(screen.getByTestId('nav-row-learn'));
     expect(screen.getByTestId('learn-screen')).toBeTruthy();
     expect(screen.getByText('How it works')).toBeTruthy();
     expect(screen.getByText('Prompt tips')).toBeTruthy();
     expect(screen.getByText('Example prompts')).toBeTruthy();
-    // Help is reached from the Learn tab (no separate top-bar Help button).
+    // Help is reached from the Learn view (no separate top-bar Help button).
     expect(screen.queryByTestId('help-button')).toBeNull();
   });
 

@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
-import { ArrowRight, Folder, Paperclip, Send } from 'lucide-react';
+import { ArrowRight, Folder, Send } from 'lucide-react';
 import { useWorkspaceStore } from '../context.js';
 import { visibleProjects } from '../store.js';
 import { STARTER_TEMPLATES } from '../starter-templates.js';
@@ -40,9 +40,6 @@ export function HomeScreen({ onNewProject, onSelectProject }: HomeScreenProps) {
           </p>
           <form style={promptFormStyle} onSubmit={handleSubmit}>
             <div style={promptRowStyle}>
-              <button type="button" style={attachButtonStyle} aria-label="Attach a file" title="Attach a file" data-testid="home-attach-button">
-                <Paperclip size={16} />
-              </button>
               <input
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
@@ -175,19 +172,6 @@ const promptRowStyle: CSSProperties = {
   backdropFilter: 'blur(10px)',
   WebkitBackdropFilter: 'blur(10px)',
   boxShadow: '0 0 26px rgba(23,107,255,.18), inset 0 0 20px rgba(31,130,255,.08)',
-};
-
-const attachButtonStyle: CSSProperties = {
-  width: 34,
-  height: 34,
-  display: 'grid',
-  placeItems: 'center',
-  flexShrink: 0,
-  border: '1px solid rgba(31,130,255,.28)',
-  borderRadius: 9,
-  background: 'rgba(23, 107, 255, 0.08)',
-  color: '#7fb0ff',
-  cursor: 'pointer',
 };
 
 const promptInputStyle: CSSProperties = {

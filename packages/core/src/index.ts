@@ -17,6 +17,8 @@ export { LeftNav, LogoHeader } from './components/LeftNav.js';
 export type { LeftNavItemId } from './components/LeftNav.js';
 export { LeftTabStrip } from './components/LeftTabStrip.js';
 export type { LeftTabId } from './components/LeftTabStrip.js';
+export { AppSidebar } from './components/AppSidebar.js';
+export type { SidebarViewId } from './components/AppSidebar.js';
 export { ProjectBrowser } from './components/ProjectBrowser.js';
 export { AccountArea } from './components/AccountArea.js';
 export { ProfileFooter, ProfileAvatar } from './components/ProfileFooter.js';

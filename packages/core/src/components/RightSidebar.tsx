@@ -202,12 +202,14 @@ const edgeStyle: CSSProperties = {
   minHeight: 0,
   display: 'flex',
   position: 'relative',
-  // No overflow clip: the open panel is an absolute overlay that extends LEFT
-  // over the centre (past the 44px strip); clipping would cut it off.
+  // The open panel is a REAL column beside the tab strip (in-flow), so the
+  // centre canvas reflows narrower and nothing under the panel is clipped or
+  // covered. The canvas stays fully visible between the two sidebars.
+  overflow: 'hidden',
 };
 
 const stripStyle: CSSProperties = {
-  width: 44,
+  width: 40,
   flexShrink: 0,
   minHeight: 0,
   display: 'flex',
@@ -244,15 +246,14 @@ const activeTabStyle: CSSProperties = {
   boxShadow: '0 0 12px rgba(23, 107, 255, 0.28)',
 };
 
-// The open panel FLOATS over the centre: absolute, right edge flush against
-// the 44px strip's left edge, so the centre never shrinks when it opens.
+// The open panel sits IN-FLOW between the canvas and the tab strip: absolute
+// positioning is gone, so the canvas reflows to the remaining width and the
+// panel never covers or clips the centre content.
 const panelStyle: CSSProperties = {
-  position: 'absolute',
-  top: 0,
-  bottom: 0,
-  right: 44,
-  zIndex: 5,
-  width: 280,
+  position: 'relative',
+  flexShrink: 0,
+  minHeight: 0,
+  width: 256,
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',

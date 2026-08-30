@@ -14,9 +14,8 @@ import { ErrorBanner } from './ErrorBanner.js';
 import { RestartOverlay } from './RestartOverlay.js';
 import { PickerModal } from './PickerModal.js';
 import { LogoHeader } from './LeftNav.js';
-import { LeftTabStrip, type LeftTabId } from './LeftTabStrip.js';
+import { AppSidebar, type SidebarViewId } from './AppSidebar.js';
 import { ProfileAvatar, ProfileFooter } from './ProfileFooter.js';
-import { ProjectBrowser } from './ProjectBrowser.js';
 import { RightSidebar, type RightTabId } from './RightSidebar.js';
 import type { LlmClient, LlmConfig } from '../llm.js';
 import type { OpenCodeRunnerClient } from '../opencode-client.js';
@@ -33,14 +32,10 @@ interface LayoutProps {
 // Centre views share the centre area the way Home does today; selecting one
 // switches the centre content. The Projects panel opens into the shared left
 // slot instead.
-const CENTRE_VIEW_TABS: LeftTabId[] = ['home', 'templates', 'my-apps', 'deployments', 'learn'];
-
-// Polish round 2 shell: the left edge is wrapped in a persistent left region
-// with the framed logo + "CRON for Code" header at its top (always visible),
-// then the icon-only tab rail + shared panel slot, then the profile footer at
-// the bottom (always visible, divider above it; panels open above it). The
-// right edge is a tab strip with a single open panel (no pinning); Review now
-// lives there. The centre is dominant; the top bar is a slim app bar (spec §6).
+// NOTE: the left edge is now ONE 288px AppSidebar (Intelligence shell parity):
+// a New Project action, a Workspace section of centre-view rows, a Projects
+// section (search, sort, project rows), and the code-safety shield pinned at
+// the bottom. The old rail + collapse-in-its-own-slot panel is gone.
 export function Layout({ onSelectProject, dataService, llm, openCodeRunner, preparing = false, folderPicker }: LayoutProps) {
   const activeProjectId = useWorkspaceStore((s) => s.activeProjectId);
   const projects = useWorkspaceStore((s) => s.projects);
@@ -59,12 +54,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
   // one panel is open at a time, and the centre takes freed space. Centre views
   // (home/templates/my-apps/deployments/learn) switch the centre content; the
   // Home view is the default landing.
-  const [centreView, setCentreView] = useState<LeftTabId | null>(null);
-  const [leftPanel, setLeftPanel] = useState<LeftTabId | null>(null);
-  // Collapse-to-rail (Intelligence-style): clicking the active panel tab hides
-  // the panel (keeps the tab highlighted) so the chat takes the freed space;
-  // clicking it again re-expands. Only the Projects panel uses this.
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [centreView, setCentreView] = useState<SidebarViewId | null>(null);
   // Right edge: controlled by Layout so the notification bell can open Review.
   const [rightTab, setRightTab] = useState<RightTabId | null>(null);
   const hadProjectRef = useRef(false);
@@ -73,12 +63,10 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
 
   // When a project becomes active (folder picker, host event, recent-project
   // click), leave the Home view and land in the workspace so the conversation
-  // and project browser are visible. Runs before paint so there is no flash.
+  // is visible. Runs before paint so there is no flash.
   useLayoutEffect(() => {
     if (activeProjectId && !hadProjectRef.current) {
-      setLeftPanel('projects');
       setCentreView(null);
-      setLeftPanelCollapsed(false);
     }
     hadProjectRef.current = !!activeProjectId;
   }, [activeProjectId]);
@@ -88,8 +76,6 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
     setChatSessionId('default');
     setDrawerOpen(false);
     setCentreView(null);
-    setLeftPanel('projects');
-    setLeftPanelCollapsed(false);
   }
 
   function startNewSession() {
@@ -107,44 +93,11 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
   }
 
   /** Opens a centre view (Home / Templates / My Apps / Deployments / Learn). */
-  function openCentreView(view: LeftTabId) {
+  function openCentreView(view: SidebarViewId) {
     setCentreView(view);
-    setLeftPanel(null);
-    setLeftPanelCollapsed(false);
   }
 
-  /** Opens the Projects panel (the "Projects view"). */
-  function openProjectsView() {
-    setCentreView(null);
-    setLeftPanel('projects');
-    setLeftPanelCollapsed(false);
-  }
-
-  function toggleLeftTab(tab: LeftTabId) {
-    // Create New is an ACTION (the existing New-Project flow) and Settings is an
-    // ACTION (ModelSettings), never panels. Centre tabs switch the centre
-    // content and close any open panel. Projects opens the shared slot.
-    if (tab === 'create-new') {
-      onSelectProject();
-      return;
-    }
-    if (CENTRE_VIEW_TABS.includes(tab)) {
-      openCentreView(tab);
-      return;
-    }
-    if (tab === 'projects') {
-      // Intelligence-style collapse: clicking the open (un-collapsed) panel
-      // collapses it to the rail; clicking again (or while on a different view)
-      // re-opens it.
-      if (leftPanel === 'projects' && !leftPanelCollapsed) {
-        setLeftPanelCollapsed(true);
-      } else {
-        openProjectsView();
-      }
-    }
-  }
-
-  const leftActive: LeftTabId | null = leftPanel ?? centreView;
+  const leftActiveView: SidebarViewId | null = centreView ?? (!activeProjectId ? 'home' : null);
 
   // Design polish — the oryx/shell background appears only on the Home screen
   // (Home centre view or no project open). Every other screen (Templates, My
@@ -187,7 +140,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
             <LogoHeader />
             <div style={brandCopyStyle}>
               <span style={brandWordStyle}><span style={brandWordCronStyle}>CRON</span> <span style={brandWordCodeStyle}>for Code</span></span>
-              <span style={brandSubtitleStyle}>GOVERNED CODING WORKSPACE</span>
+              <span style={brandSubtitleStyle}>CODING WORKSPACE</span>
             </div>
           </div>
           <div style={buildModeStyle}>
@@ -231,7 +184,7 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
                 <button type="button" role="menuitem" style={settingsMenuItemStyle} onClick={() => { setSettingsMenuOpen(false); setSettingsOpen(true); }} data-testid="settings-menu-item-settings">
                   <Settings size={15} /> <span>Settings</span>
                 </button>
-                <button type="button" role="menuitem" style={settingsMenuItemStyle} onClick={() => { setSettingsMenuOpen(false); setCentreView('learn'); setLeftPanel(null); }} data-testid="settings-menu-item-help">
+                <button type="button" role="menuitem" style={settingsMenuItemStyle} onClick={() => { setSettingsMenuOpen(false); setCentreView('learn'); }} data-testid="settings-menu-item-help">
                   <CircleQuestionMark size={15} /> <span>Help</span>
                 </button>
               </div>
@@ -255,12 +208,14 @@ export function Layout({ onSelectProject, dataService, llm, openCodeRunner, prep
 
         <main style={workspaceStyle} data-testid="opencode-style-workspace">
           <div style={leftRegionStyle}>
-            <div style={leftRegionBodyStyle}>
-              <LeftTabStrip active={leftActive} onToggle={toggleLeftTab} onOpenReview={() => setRightTab('review')} />
-              {leftPanel === 'projects' && !leftPanelCollapsed && (
-                <ProjectBrowser onNewProject={onSelectProject} onSelectProject={(projectId) => void chooseProject(projectId)} onViewAll={openProjectsView} />
-              )}
-            </div>
+            <AppSidebar
+              onNewProject={onSelectProject}
+              onSelectProject={(projectId) => void chooseProject(projectId)}
+              onViewAll={() => openCentreView('my-apps')}
+              onOpenReview={() => setRightTab('review')}
+              onSelectView={(view) => openCentreView(view)}
+              activeView={leftActiveView}
+            />
           </div>
           <section style={centrePaneStyle} data-testid="centre-pane">
             {renderCentre()}
@@ -324,10 +279,10 @@ const appBaseStyle: CSSProperties = { position: 'relative', zIndex: 1, height: '
 const appStyle: CSSProperties = { ...appBaseStyle, background: 'linear-gradient(to bottom, rgba(5, 8, 18, 0.88), rgba(5, 8, 18, 0.94))' };
 const glowAppStyle: CSSProperties = { ...appBaseStyle, background: 'linear-gradient(to bottom, rgba(5, 8, 18, 0.56), rgba(5, 8, 18, 0.72))' };
 const topBarStyle: CSSProperties = { height: 74, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px 0 26px', borderBottom: '1px solid #143152', background: '#040b18', boxSizing: 'border-box' };
-const brandBlockStyle: CSSProperties = { flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 };
+const brandBlockStyle: CSSProperties = { flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 };
 const brandCopyStyle: CSSProperties = { flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 };
-const brandSubtitleStyle: CSSProperties = { flexShrink: 0, fontSize: 11, fontWeight: 780, letterSpacing: 2.2, whiteSpace: 'nowrap', color: '#91b8de', textTransform: 'uppercase', paddingLeft: 1, display: 'none' };
-const brandWordStyle: CSSProperties = { flexShrink: 0, fontSize: 19, fontWeight: 800, letterSpacing: 0, whiteSpace: 'nowrap', color: '#ffffff', paddingRight: 2, display: 'flex', alignItems: 'baseline', gap: 7 };
+const brandSubtitleStyle: CSSProperties = { flexShrink: 0, fontSize: 10, fontWeight: 760, letterSpacing: 0, whiteSpace: 'nowrap', color: '#91b8de', textTransform: 'uppercase', paddingLeft: 1, display: 'block' };
+const brandWordStyle: CSSProperties = { flexShrink: 0, fontSize: 15, fontWeight: 800, letterSpacing: 0, whiteSpace: 'nowrap', color: '#ffffff', paddingRight: 2, display: 'flex', alignItems: 'baseline', gap: 5 };
 const brandWordCronStyle: CSSProperties = { color: '#2ea8ff' };
 const brandWordCodeStyle: CSSProperties = { color: '#ffffff' };
 const buildModeStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 };
@@ -349,8 +304,7 @@ const sessionMetaStyle: CSSProperties = { minWidth: 0, overflow: 'hidden', textO
 // The right panels still float over the centre (Code-specific, no right panel
 // in Intelligence). workspace stays position:relative for the right overlays.
 const workspaceStyle: CSSProperties = { flex: 1, minHeight: 0, display: 'flex', position: 'relative', overflow: 'hidden' };
-const leftRegionStyle: CSSProperties = { flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' };
-const leftRegionBodyStyle: CSSProperties = { flex: 1, minHeight: 0, display: 'flex' };
+const leftRegionStyle: CSSProperties = { flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column' };
 const centrePaneStyle: CSSProperties = { flex: 1, minWidth: 0, minHeight: 0, display: 'flex', overflow: 'hidden' };
 const centreInnerStyle: CSSProperties = { flex: 1, minWidth: 0, minHeight: 0, display: 'flex', overflow: 'hidden' };
 const conversationPaneStyle: CSSProperties = { flex: 1, minWidth: 340, minHeight: 0, display: 'flex', overflow: 'hidden' };

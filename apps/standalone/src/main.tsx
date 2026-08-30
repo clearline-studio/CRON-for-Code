@@ -9,8 +9,10 @@ import '@cron-code/design-tokens';
 
 import shellBgUrl from '../branding/assets/cron_shell_background.png';
 import logoUrl from '../branding/assets/code_logo_transparent.png';
-// Locked spec §5: the small (505 KB) loop — the full-size loop stalls the top bar on load.
-import logoVideoUrl from '../branding/assets/cron_logo_loop_small.mp4';
+// Top-bar logo loop (Intelligence parity): the flash-style loop. Intelligence
+// runs the same size loop in her header. Fallback if the 6.3MB file ever stalls
+// the top bar on load: swap to cron_logo_loop_small.mp4 (the old design's small cut).
+import logoVideoUrl from '../branding/assets/code_logo_loop.mp4';
 import flashVideoUrl from '../branding/assets/code_flash.mp4';
 
 async function performProjectAction(action: HostProjectAction): Promise<HostProjectActionResult> {
@@ -58,6 +60,17 @@ async function bootstrap() {
   rootEl.style.setProperty('--cron-logo-url', `url(${JSON.stringify(logoUrl).slice(1, -1)})`);
   rootEl.style.setProperty('--cron-logo-video-url', `url(${JSON.stringify(logoVideoUrl).slice(1, -1)})`);
   rootEl.style.setProperty('--cron-flash-video-url', `url(${JSON.stringify(flashVideoUrl).slice(1, -1)})`);
+
+  // Wire the flash video INTO the pre-React splash media element. The splash
+  // panel's <video id="splash-media"> has no src in the HTML (the asset is
+  // bundled), so this is the only point that connects it — without it the
+  // splash shows an empty dark media box. Set it as soon as the bundle loads so
+  // the flash plays during the whole splash hold.
+  const splashMedia = document.getElementById('splash-media') as HTMLVideoElement | null;
+  if (splashMedia) {
+    splashMedia.src = flashVideoUrl;
+    void splashMedia.play().catch(() => undefined);
+  }
   // Post-restart instances (relaunched by dev.mjs) carry restartHandoff in the
   // runtime marker; the renderer keeps the Restarting overlay visible from
   // first paint until the app is ready.

@@ -154,22 +154,22 @@ const logoHeaderStyle: CSSProperties = {
   boxSizing: 'border-box',
 };
 
-// Frameless logo (Intelligence-style): no metallic box ring; the animated loop
-// sits directly on the top bar's dark background.
+// Frameless logo (Intelligence parity): no box ring, no round mask — the flash
+// loop sits directly on the top bar, 40px tall exactly like Intelligence's.
 const logoFrameStyle: CSSProperties = {
-  width: 72,
-  height: 72,
+  height: 40,
+  width: 'auto',
   flexShrink: 0,
-  display: 'grid',
-  placeItems: 'center',
+  display: 'flex',
+  alignItems: 'center',
   boxSizing: 'border-box',
-  borderRadius: '50%',
-  overflow: 'hidden',
+  overflow: 'visible',
 };
 
 const logoMediaStyle: CSSProperties = {
-  width: '100%',
   height: '100%',
+  width: 'auto',
+  maxWidth: 200,
   objectFit: 'contain',
   display: 'block',
 };
