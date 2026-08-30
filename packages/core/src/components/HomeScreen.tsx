@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
-import { ArrowRight, Folder, Send } from 'lucide-react';
+import { ArrowRight, Folder, Paperclip, Send } from 'lucide-react';
 import { useWorkspaceStore } from '../context.js';
 import { visibleProjects } from '../store.js';
 import { STARTER_TEMPLATES } from '../starter-templates.js';
@@ -31,6 +31,7 @@ export function HomeScreen({ onNewProject, onSelectProject }: HomeScreenProps) {
 
   return (
     <div style={wrapperStyle} data-testid="home-screen">
+      <style>{homeScreenStyles}</style>
       <div style={containerStyle}>
         <section style={heroStyle}>
           <h1 style={heroHeadingStyle}>What do you want to build?</h1>
@@ -39,6 +40,9 @@ export function HomeScreen({ onNewProject, onSelectProject }: HomeScreenProps) {
           </p>
           <form style={promptFormStyle} onSubmit={handleSubmit}>
             <div style={promptRowStyle}>
+              <button type="button" style={attachButtonStyle} aria-label="Attach a file" title="Attach a file" data-testid="home-attach-button">
+                <Paperclip size={16} />
+              </button>
               <input
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
@@ -119,14 +123,15 @@ const wrapperStyle: CSSProperties = {
   minWidth: 0,
   minHeight: 0,
   overflowY: 'auto',
-  background: 'linear-gradient(to right, rgba(3, 12, 28, 0.40), rgba(3, 12, 28, 0.10) 58%, rgba(3, 12, 28, 0.02))',
+  scrollbarWidth: 'none',
+  background: 'radial-gradient(1200px 620px at 50% 10%, rgba(23, 107, 255, 0.16), rgba(3, 12, 28, 0.28) 55%, rgba(3, 12, 28, 0.06) 100%)',
   fontFamily: 'var(--cron-font-family)',
 };
 
 const containerStyle: CSSProperties = {
   maxWidth: 720,
   margin: '0 auto',
-  padding: 'clamp(24px, 5vh, 48px) clamp(20px, 4vw, 48px) 40px',
+  padding: 'clamp(28px, 6vh, 56px) clamp(20px, 4vw, 48px) 72px',
   display: 'flex',
   flexDirection: 'column',
   gap: 34,
@@ -141,15 +146,15 @@ const heroStyle: CSSProperties = {
 
 const heroHeadingStyle: CSSProperties = {
   margin: 0,
-  fontSize: 26,
-  fontWeight: 300,
-  color: '#f5f9ff',
-  letterSpacing: 0.4,
+  fontSize: 22,
+  fontWeight: 200,
+  color: '#ffffff',
+  letterSpacing: 0.5,
 };
 
 const heroSubtextStyle: CSSProperties = {
   margin: 0,
-  fontSize: 13.5,
+  fontSize: 14.5,
   color: '#8da4c7',
   lineHeight: 1.5,
   maxWidth: 520,
@@ -163,11 +168,26 @@ const promptRowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  padding: '6px 6px 6px 16px',
+  padding: '6px 6px 6px 10px',
   border: '1px solid rgba(31,130,255,.45)',
   borderRadius: 12,
-  background: 'rgba(9, 18, 34, 0.85)',
-  boxShadow: '0 0 18px rgba(23,107,255,.14)',
+  background: 'rgba(14, 24, 42, 0.55)',
+  backdropFilter: 'blur(10px)',
+  WebkitBackdropFilter: 'blur(10px)',
+  boxShadow: '0 0 26px rgba(23,107,255,.18), inset 0 0 20px rgba(31,130,255,.08)',
+};
+
+const attachButtonStyle: CSSProperties = {
+  width: 34,
+  height: 34,
+  display: 'grid',
+  placeItems: 'center',
+  flexShrink: 0,
+  border: '1px solid rgba(31,130,255,.28)',
+  borderRadius: 9,
+  background: 'rgba(23, 107, 255, 0.08)',
+  color: '#7fb0ff',
+  cursor: 'pointer',
 };
 
 const promptInputStyle: CSSProperties = {
@@ -204,11 +224,11 @@ const sectionStyle: CSSProperties = {
 
 const sectionHeadingStyle: CSSProperties = {
   margin: 0,
-  fontSize: 11,
-  fontWeight: 800,
-  letterSpacing: 1.2,
+  fontSize: 12.5,
+  fontWeight: 700,
+  letterSpacing: 1.4,
   textTransform: 'uppercase',
-  color: '#5f7392',
+  color: '#c3d4ef',
 };
 
 const recentGridStyle: CSSProperties = {
@@ -222,14 +242,18 @@ const projectCardStyle: CSSProperties = {
   alignItems: 'center',
   gap: 9,
   padding: '10px 11px',
-  border: '1px solid rgba(100,160,255,.16)',
+  border: '1px solid rgba(31,130,255,.22)',
   borderRadius: 10,
-  background: 'rgba(11, 22, 40, 0.72)',
+  background: 'rgba(14, 24, 42, 0.5)',
+  backdropFilter: 'blur(8px)',
+  WebkitBackdropFilter: 'blur(8px)',
+  boxShadow: '0 0 16px rgba(23,107,255,.10)',
   color: '#d9e8ff',
   textAlign: 'left',
   cursor: 'pointer',
   fontFamily: 'var(--cron-font-family)',
   boxSizing: 'border-box',
+  transition: 'border-color .15s, box-shadow .15s, transform .15s',
 };
 
 const projectIconStyle: CSSProperties = {
@@ -290,14 +314,18 @@ const templateCardStyle: CSSProperties = {
   alignItems: 'flex-start',
   gap: 7,
   padding: '14px 14px 13px',
-  border: '1px solid rgba(100,160,255,.16)',
+  border: '1px solid rgba(31,130,255,.22)',
   borderRadius: 10,
-  background: 'rgba(11, 22, 40, 0.72)',
+  background: 'rgba(14, 24, 42, 0.5)',
+  backdropFilter: 'blur(8px)',
+  WebkitBackdropFilter: 'blur(8px)',
+  boxShadow: '0 0 16px rgba(23,107,255,.10)',
   color: '#d9e8ff',
   textAlign: 'left',
   cursor: 'pointer',
   fontFamily: 'var(--cron-font-family)',
   boxSizing: 'border-box',
+  transition: 'border-color .15s, box-shadow .15s, transform .15s',
 };
 
 const templateIconStyle: CSSProperties = {
@@ -329,3 +357,20 @@ const templateNoteStyle: CSSProperties = {
   color: '#5f7392',
   lineHeight: 1.5,
 };
+
+// Scoped styles for the Home dashboard: hover/click affordance on cards so they
+// read as clearly clickable (frosted-glass + blue halo strengthen on hover).
+const homeScreenStyles = `
+  [data-testid="home-template-" i], [data-testid="home-project-" i] {
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+  }
+  [data-testid="home-template-" i]:hover, [data-testid="home-project-" i]:hover {
+    border-color: rgba(31, 130, 255, 0.55);
+    box-shadow: 0 0 26px rgba(31, 130, 255, 0.22);
+    transform: translateY(-1px);
+  }
+  [data-testid="home-template-" i]:active, [data-testid="home-project-" i]:active {
+    transform: translateY(0);
+    box-shadow: 0 0 18px rgba(31, 130, 255, 0.28);
+  }
+`;

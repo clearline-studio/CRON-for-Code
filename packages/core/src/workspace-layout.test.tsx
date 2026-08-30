@@ -445,16 +445,18 @@ describe('Layout workspace hierarchy', () => {
     expect(screen.getByText('CRON')).toBeTruthy();
     expect(screen.getByText('for Code')).toBeTruthy();
     expect(screen.getByTestId('left-tab-strip')).toBeTruthy();
-    // All eight icon-only edge tabs are present, top to bottom.
-    for (const id of ['home', 'projects', 'create-new', 'templates', 'my-apps', 'deployments', 'learn', 'settings']) {
+    // All seven labelled edge tabs are present, top to bottom.
+    for (const id of ['home', 'projects', 'create-new', 'templates', 'my-apps', 'deployments', 'learn']) {
       expect(screen.getByTestId(`left-tab-${id}`)).toBeTruthy();
     }
     // No Menu tab and no "Files" tab.
     expect(screen.queryByTestId('left-tab-menu')).toBeNull();
     expect(screen.queryByTestId('left-tab-files')).toBeNull();
-    // Icon-only tabs: no permanent text labels in the strip.
-    expect(screen.queryByText('Create New')).toBeNull();
-    expect(screen.queryByText('Settings')).toBeNull();
+    // Settings moved to the top bar (not a rail tab).
+    expect(screen.queryByTestId('left-tab-settings')).toBeNull();
+    expect(screen.getByTestId('settings-menu-button')).toBeTruthy();
+    // Labeled rail: text labels are visible (Intelligence-style), not icon-only.
+    expect(screen.getByText('Create New')).toBeTruthy();
     expect(screen.getByTestId('right-tab-strip')).toBeTruthy();
     // Projects panel is the default open left panel; the Menu/nav panel is gone.
     expect(screen.getByTestId('project-browser')).toBeTruthy();
@@ -529,28 +531,26 @@ describe('Layout workspace hierarchy', () => {
     expect(screen.getByTestId('right-panel-review')).toBeTruthy();
   });
 
-  it('oryx background appears only on Home; other screens get a blue glow ambience instead', () => {
+  it('oryx background is consistent on every screen (Intelligence-style uniform backdrop)', () => {
     const { store } = createTestStore();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')] });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
     // Home (no project open): oryx shell background image.
     let backdrop = screen.getByTestId('app-backdrop');
     expect(backdrop.style.backgroundImage).toContain('--cron-shell-bg-image');
-    // Project conversation (active project, no centre view): blue radial glow.
+    // Project conversation (active project, no centre view): same oryx backdrop.
     act(() => {
       store.setState({ activeProjectId: 'p1' });
     });
     backdrop = screen.getByTestId('app-backdrop');
-    expect(backdrop.style.backgroundImage).toContain('radial-gradient');
-    expect(backdrop.style.backgroundImage).not.toContain('--cron-shell-bg-image');
-    // Templates is a non-Home centre view: glow, no oryx.
+    expect(backdrop.style.backgroundImage).toContain('--cron-shell-bg-image');
+    // Templates is a non-Home centre view: still the same oryx backdrop.
     fireEvent.click(screen.getByTestId('left-tab-templates'));
     backdrop = screen.getByTestId('app-backdrop');
-    expect(backdrop.style.backgroundImage).not.toContain('--cron-shell-bg-image');
-    expect(backdrop.style.backgroundImage).toContain('radial-gradient');
+    expect(backdrop.style.backgroundImage).toContain('--cron-shell-bg-image');
   });
 
-  it('profile avatar: compact avatar sits at the bottom of the left rail and clicking opens the browser-style profile card', () => {
+  it('profile avatar: compact avatar in the top-right and clicking opens the browser-style profile card', () => {
     const { store } = createTestStore();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
@@ -562,7 +562,7 @@ describe('Layout workspace hierarchy', () => {
     const footer = screen.getByTestId('profile-footer');
     expect(within(footer).getByText('All Systems Operational')).toBeTruthy();
     expect(within(footer).getByText('v1.0.0')).toBeTruthy();
-    // Clicking the avatar opens the popover with the full account card content.
+    // Clicking the avatar opens the account modal with the full account card content.
     fireEvent.click(screen.getByTestId('profile-avatar-button'));
     const popover = screen.getByTestId('profile-popover');
     expect(popover).toBeTruthy();
@@ -572,8 +572,8 @@ describe('Layout workspace hierarchy', () => {
     expect(within(popover).getByText('1,250 / 2,000')).toBeTruthy();
     expect(within(popover).getByText('v1.0.0')).toBeTruthy();
     expect(within(popover).getByText('All Systems Operational')).toBeTruthy();
-    // Clicking again closes it.
-    fireEvent.click(screen.getByTestId('profile-avatar-button'));
+    // Closing the modal uses the modal's close button.
+    fireEvent.click(screen.getByTestId('account-modal-close'));
     expect(screen.queryByTestId('profile-popover')).toBeNull();
   });
 
@@ -586,8 +586,8 @@ describe('Layout workspace hierarchy', () => {
       commands: COMMANDS,
     });
     renderWithStore(<Layout onSelectProject={onSelectProject} />, store);
-    // All eight edge tabs are present.
-    for (const id of ['home', 'projects', 'create-new', 'templates', 'my-apps', 'deployments', 'learn', 'settings']) {
+    // All seven edge tabs are present.
+    for (const id of ['home', 'projects', 'create-new', 'templates', 'my-apps', 'deployments', 'learn']) {
       expect(screen.getByTestId(`left-tab-${id}`)).toBeTruthy();
     }
     // No "Files" tab anywhere on the left edge.
@@ -600,7 +600,7 @@ describe('Layout workspace hierarchy', () => {
     expect(screen.queryByTestId('left-nav')).toBeNull();
   });
 
-  it('left tabs are icon-only: the label reveals on hover, inert tabs say coming soon, and Settings opens ModelSettings', () => {
+  it('left tabs show persistent labels (Intelligence-style), and Settings opens ModelSettings from the top bar', () => {
     const { store } = createTestStore();
     store.setState({
       projects: [createCodeProject('p1', 'Meds', 'C:/repo')],
@@ -608,13 +608,14 @@ describe('Layout workspace hierarchy', () => {
       commands: COMMANDS,
     });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    // No label until hover.
-    expect(screen.queryByTestId('left-tab-label-home')).toBeNull();
-    fireEvent.mouseEnter(screen.getByTestId('left-tab-wrap-home'));
-    expect(screen.getByTestId('left-tab-label-home').textContent).toBe('Home');
-    fireEvent.mouseLeave(screen.getByTestId('left-tab-wrap-home'));
-    expect(screen.queryByTestId('left-tab-label-home')).toBeNull();
-    // Every tab is live now: the hover label reveals the plain section name.
+    // Labels are visible directly on the rail (no hover needed).
+    expect(screen.getByText('Home')).toBeTruthy();
+    expect(screen.getByText('Projects')).toBeTruthy();
+    expect(screen.getByText('Templates')).toBeTruthy();
+    expect(screen.getByText('Learn')).toBeTruthy();
+    expect(screen.getByText('Create New')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('left-tab-home'));
+    // The hover flyout still reveals the plain section name (labelled rail).
     fireEvent.mouseEnter(screen.getByTestId('left-tab-wrap-learn'));
     expect(screen.getByTestId('left-tab-label-learn').textContent).toBe('Learn');
     fireEvent.mouseLeave(screen.getByTestId('left-tab-wrap-learn'));
@@ -624,8 +625,9 @@ describe('Layout workspace hierarchy', () => {
     expect(screen.getByTestId('home-screen')).toBeTruthy();
     expect(screen.queryByTestId('project-browser')).toBeNull();
     expect(screen.queryByTestId('left-nav')).toBeNull();
-    // Settings is an ACTION: it opens ModelSettings, never a panel.
-    fireEvent.click(screen.getByTestId('left-tab-settings'));
+    // Settings moved to the top bar: the gear menu's Settings item opens ModelSettings.
+    fireEvent.click(screen.getByTestId('settings-menu-button'));
+    fireEvent.click(screen.getByTestId('settings-menu-item-settings'));
     expect(screen.getByRole('dialog', { name: 'AI settings' })).toBeTruthy();
     expect(screen.queryByTestId('left-nav')).toBeNull();
     expect(screen.getByTestId('home-screen')).toBeTruthy();
@@ -823,16 +825,17 @@ describe('Slice 1 shell components', () => {
     expect(screen.getByText('All Systems Operational')).toBeTruthy();
   });
 
-  it('Layout: Create New runs the existing New-Project flow and Settings opens ModelSettings', () => {
+  it('Layout: Create New runs the existing New-Project flow and Settings opens ModelSettings (top bar)', () => {
     const { store } = createTestStore();
     const onSelectProject = vi.fn();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={onSelectProject} />, store);
-    // No Menu tab / nav panel anymore: Create New and Settings are direct tabs.
+    // No Menu tab / nav panel anymore: Create New is a direct tab, Settings is in the top bar.
     expect(screen.queryByTestId('left-tab-menu')).toBeNull();
     fireEvent.click(screen.getByTestId('left-tab-create-new'));
     expect(onSelectProject).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByTestId('left-tab-settings'));
+    fireEvent.click(screen.getByTestId('settings-menu-button'));
+    fireEvent.click(screen.getByTestId('settings-menu-item-settings'));
     expect(screen.getByRole('dialog', { name: 'AI settings' })).toBeTruthy();
   });
 });
@@ -985,7 +988,7 @@ describe('complete screens + buttons', () => {
     expect(publish.disabled).toBe(true);
   });
 
-  it('Learn tab shows real help content, and the top-bar Help button opens it too', () => {
+  it('Learn tab shows real help content (the help entry point)', () => {
     const { store } = createTestStore();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
@@ -994,9 +997,8 @@ describe('complete screens + buttons', () => {
     expect(screen.getByText('How it works')).toBeTruthy();
     expect(screen.getByText('Prompt tips')).toBeTruthy();
     expect(screen.getByText('Example prompts')).toBeTruthy();
-    // Help button opens the same screen.
-    fireEvent.click(screen.getByTestId('help-button'));
-    expect(screen.getByTestId('learn-screen')).toBeTruthy();
+    // Help is reached from the Learn tab (no separate top-bar Help button).
+    expect(screen.queryByTestId('help-button')).toBeNull();
   });
 
   it('the notification bell shows a real pending-approval badge and opens the Review panel', () => {
@@ -1021,14 +1023,11 @@ describe('complete screens + buttons', () => {
     expect(screen.queryByTestId('notification-badge')).toBeNull();
   });
 
-  it('Speak to CRON is present but clearly coming soon (disabled)', () => {
+  it('Speak to CRON is absent from the top bar (voice not decided; removed to declutter)', () => {
     const { store } = createTestStore();
     store.setState({ projects: [createCodeProject('p1', 'Meds', 'C:/repo')], activeProjectId: 'p1', commands: COMMANDS });
     renderWithStore(<Layout onSelectProject={() => undefined} />, store);
-    const speak = screen.getByRole('button', { name: /Speak to CRON/ }) as HTMLButtonElement;
-    expect(speak).toBeTruthy();
-    expect(speak.disabled).toBe(true);
-    expect(speak.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('button', { name: /Speak to CRON/ })).toBeNull();
   });
 });
 

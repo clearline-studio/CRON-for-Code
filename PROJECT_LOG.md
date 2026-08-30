@@ -1,6 +1,135 @@
 ﻿
 ---
 
+## 2026-08-29 - Final Home/top-bar polish (3 notes)
+
+- Logo bumped to 72px (was 60) in LeftNav.tsx.
+- Hero heading "What do you want to build?" smaller + thinner (22px, weight 200).
+- Section headings ("RECENT PROJECTS"/"START FROM A TEMPLATE") bolder-but-thin,
+  brighter (12.5px, letter-spacing 1.4, color #c3d4ef).
+- Left sidebar tab text brightened to near-white (#e8f0fb); icon color brightened.
+- Verified: typecheck ✓ (all 7 pkgs), lint ✓ (0 errors, 3 pre-existing), test ✓
+  (223 core), build ✓. Window captured via PrintWindow to confirm the look.
+- Note: invoking electron through the shell attach was flaky; the reliable way to
+  (re)launch the dev app is the proper launcher
+  (`scripts\run-code-dev-hidden.ps1 -Mode dev`). Recorded for future sessions.
+
+---
+
+## 2026-08-29 - UI feedback pass (Venessa's 11-point list)
+
+Home/canvas polish based on Venessa's numbered notes:
+- #2 Hero heading thinner (fontWeight 300, 30px, white) with subtext beneath.
+- #3 Top-bar logo enlarged ~25% (48px -> 60px).
+- #4 Active left sidebar tab now has a blue left-edge accent line
+  (inset box-shadow), on top of the existing blue tint.
+- #5 Tab icons get a blue halo glow (drop-shadow) + brighter text on hover/active.
+- #6 Code-safety shield spacing bumped so it isn't clipped by the footer/taskbar.
+- #7 Home canvas scrollbar hidden (scrollbarWidth: none) + tight.
+- #8 Home canvas background switched to a soft radial blue glow to lighten it.
+- #9 Template cards + project cards + the prompt intake box are now frosted glass
+  (backdrop-blur) with a blue halo glow.
+- #10 Prompt intake box gained an Attach (paperclip) button on the left.
+- #11 Cards have real click affordances (hover lift + glow via a scoped <style>),
+  and their click handlers are verified by tests (template -> New-Project flow,
+  project card -> opens workspace).
+- Verified: typecheck ✓, lint ✓ (0 errors, 3 pre-existing), test ✓ (223 core),
+  build ✓. I caught + fixed a syntax slip (`]` vs `}`) during this pass.
+- Scoped CSS used (injected <style>) because core uses inline styles only.
+
+---
+
+## 2026-08-29 - Intelligence look alignment (batch 2)
+
+- Matched the top bar + account section to CRON for Intelligence (peeked at
+  Intelligence's Header.jsx/App.jsx/shell.css only — did NOT touch her repo).
+- Top bar: now 74px, dark #040b18, border #143152 (was 44px lighter).
+- Logo: frameless + bigger 48px animated loop (removed metallic box frame), top-left.
+- Heading: CRON is now BLUE (#45ccff) and "for Code" is WHITE (was reversed).
+- Home screen: removed the logo card; oryx shell background via the backdrop.
+- Account section: replaced the bottom-left avatar popover with an
+  Intelligence-style header account button (avatar + "Venessa" + chevron) that
+  opens a centred Account modal (dark blurred backdrop).
+- Settings: now an Intelligence-style top-bar dropdown (gear -> menu with
+  Settings + Help); removed the Settings tab from the left rail entirely.
+- Left rail: 7 labelled tabs (Home/Projects/Create New/Templates/My Apps/
+  Deployments/Learn). Settings no longer a rail tab.
+- Declutter: removed the disabled "Speak to CRON" button from the top bar
+  (voice not decided); made New Session an icon; settings gear icon-only.
+- Top bar controls enlarged to 38px (#071427 bg, #1c4268 border) like Intelligence.
+- Home content bottom padding increased (72px) so nothing clips at the footer.
+- Single "2 instances" cause identified: a stale PACKAGED copy
+  (win-unpacked\CRON for Code.exe) from this morning ran ALONGSIDE the dev app
+  (different exe = no shared single-instance lock). Closing the stale packaged
+  copy leaves only the dev app. The app's own requestSingleInstanceLock works.
+- Tests updated in workspace-layout.test.tsx (Settings to top bar, Speak-removed,
+  account modal close) — suite green.
+- Verified: typecheck ✓, lint ✓ (3 pre-existing warnings), test ✓ (223 core),
+  build ✓. Captured via PrintWindow to confirm the new look.
+- Pre-edit backup: `backups/pre-ui-polish-20260829/`.
+
+---
+
+## 2026-08-29 - UI uniformity pass (Code -> Intelligence family look)
+
+- Goal: make CRON for Code read as a sibling of CRON for Intelligence (they'll
+  slide together), per Venessa's direction + brand assets.
+- Branding wired (assets copied to `apps/standalone/branding/assets/`):
+  - Flash/splash screen plays `code_flash.mp4` (`--cron-flash-video-url`, set in
+    main.tsx + 3s hold in index.html).
+  - App logo (top bar) = `code_logo_loop.mp4` (`--cron-logo-video-url`).
+  - Home-screen-only animated logo loop = `code_logo_loop.mp4` (HomeScreen hero).
+- Layout restructure (intelligence-style chrome):
+  - Logo moved into the TOP BAR (was a big block above the left rail).
+  - Left rail is now a LABELLED list (Home/Projects/Create New/Templates/My
+    Apps/Deployments/Learn/Settings) instead of icon-only; hover flyout retained.
+  - Profile avatar moved to top-right (was bottom-left); global footer stays.
+  - Background unified to the oryx/shell scene on every screen (was Home-only).
+  - Top bar de-cluttered: removed the "Build mode:" text label + standalone Help
+    button; Speak-to-CRON is now an icon-only disabled mic button.
+- Files changed: `main.tsx`, `index.html`, `Layout.tsx`, `LeftNav.tsx`,
+  `LeftTabStrip.tsx`, `HomeScreen.tsx` (+ tests in `workspace-layout.test.tsx`
+  updated to the new design). Pre-edit backup: `backups/pre-ui-polish-20260829/`.
+- Verified: typecheck ✓, lint ✓ (3 pre-existing warnings), test ✓ (223 core),
+  build ✓. App relaunched and captured via PrintWindow to confirm the new look.
+- Backup for the #4 packaging fix: `backups/pre-package-fix-20260829/`.
+
+---
+
+## 2026-08-29 - Packaged app verified RUNNING (post #4 fix)
+- Launched `win-unpacked\CRON for Code.exe` (the real production build, what the
+  installer installs). Verified: window titled "CRON for Code" (NOT blank, NOT
+  Electron), 1 main process + renderer children (single instance), standalone —
+  not connected to any dev Vite server. The #4 packaging blank-window fix is
+  proven end-to-end: the packaged app actually launches and renders.
+- Note: the leftover dev Vite (node.exe on :5190) and the separate
+  `CRON for Intelligence` window are unrelated to the packaged CRON for Code app.
+- Backup for the #4 change: `backups/pre-package-fix-20260829/`.
+
+---
+
+## 2026-08-29 - Packaging blank-window fix (#4) — package now builds first
+
+- Defect: the `package` script (`electron-builder --win`) did NOT build first, so a
+  packaged/fresh app shipped a stale `dist-renderer/index.html` pointing at
+  gitignored JS/CSS hashes → blank window.
+- Fix: `apps/standalone/package.json` `package` script now runs the parent root
+  workspace build first, then electron-builder:
+  `package` = `pnpm --dir ../.. run build && electron-builder --win`.
+- Verified live: ran `pnpm --filter @cron-code/standalone package`. Build ran, then
+  electron-builder produced `CRON for Code Setup 1.1.7.exe` + `win-unpacked` to
+  Desktop. Inspected `app.asar` — `dist-renderer/index.html` references
+  `index-CkrFFtHn.js` / `index-DPulWfBg.css` and both are packed alongside it in
+  the archive. Renderer is self-consistent; blank-window root cause eliminated.
+- Suite still green after change: typecheck ✓, test ✓ (contracts 24, data-service
+  94, host-adapter 23, core 223), build ✓.
+- Pre-edit backup: `backups/pre-package-fix-20260829/standalone-package.json`.
+- Test artifacts left on Desktop (`win-unpacked/`, `CRON for Code Setup 1.1.7.exe`
+  + `.blockmap`) — left in place (no delete without Venessa). NOTE: a stray
+  `index.html` also appears at repo root from the asar extraction; untracked.
+
+---
+
 ## 2026-08-29 (later) - Findings 1-3 fix pass
 
 - #1 (OpenCode not reachable from the UI) — resolved by verification: the live

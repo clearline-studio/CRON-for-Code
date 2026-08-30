@@ -99,14 +99,12 @@ function unwrapUrl(value: string): string {
   return value.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
 }
 
-// Persistent brand header (polish round 2): the framed animated logo + "CRON for
-// Code" wordmark sit at the top-left of the app, above the left tab rail + panel
-// slot, so they are visible no matter which tab/panel is open. The account area
-// stays inside the Menu panel (bottom), not here.
+// Compact brand header for the top bar (Intelligence-style): the animated logo
+// loop sits inline against the "CRON for Code" wordmark, so the whole brand
+// reads as one unit at the top-left. The video URL flows in via the
+// --cron-logo-video-url CSS variable set in main.tsx, falling back to the
+// static logo, then the icon.
 export function LogoHeader() {
-  // Animated logo loop (spec §31 rev.5): the video URL flows in via the
-  // --cron-logo-video-url CSS variable set in main.tsx, mirroring the existing
-  // --cron-logo-url pattern. Falls back to the static logo, then the icon.
   const logoVideo = getComputedStyle(document.documentElement).getPropertyValue('--cron-logo-video-url').trim();
   const logoImage = getComputedStyle(document.documentElement).getPropertyValue('--cron-logo-url').trim();
   const hasVideo = !!logoVideo && logoVideo !== 'none';
@@ -131,7 +129,7 @@ export function LogoHeader() {
           )}
         </div>
       ) : (
-        <Boxes size={20} color="#1F82FF" style={{ flexShrink: 0 }} />
+        <Boxes size={24} color="#45ccff" style={{ flexShrink: 0 }} />
       )}
     </div>
   );
@@ -150,31 +148,23 @@ const navStyle: CSSProperties = {
 };
 
 const logoHeaderStyle: CSSProperties = {
-  width: 64,
-  flexShrink: 0,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '10px 8px',
-  boxSizing: 'border-box',
-  background: 'rgba(4, 13, 28, 0.94)',
-  borderBottom: '1px solid rgba(100,160,255,.18)',
-};
-
-// Square (1:1) chrome/silver frame, thinned to a refined 2px metallic ring with
-// a lighter sheen (polish round 2). The video stays 44px; the ring just frames
-// it instead of swallowing it.
-const logoFrameStyle: CSSProperties = {
-  width: 44,
-  height: 44,
   flexShrink: 0,
   display: 'grid',
   placeItems: 'center',
   boxSizing: 'border-box',
-  padding: 2,
-  borderRadius: 10,
-  background: 'linear-gradient(180deg, rgba(232,238,246,0.92) 0%, rgba(168,184,204,0.5) 60%, rgba(216,226,238,0.72) 100%)',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(240,245,251,0.4)',
+};
+
+// Frameless logo (Intelligence-style): no metallic box ring; the animated loop
+// sits directly on the top bar's dark background.
+const logoFrameStyle: CSSProperties = {
+  width: 72,
+  height: 72,
+  flexShrink: 0,
+  display: 'grid',
+  placeItems: 'center',
+  boxSizing: 'border-box',
+  borderRadius: '50%',
+  overflow: 'hidden',
 };
 
 const logoMediaStyle: CSSProperties = {
@@ -182,8 +172,6 @@ const logoMediaStyle: CSSProperties = {
   height: '100%',
   objectFit: 'contain',
   display: 'block',
-  borderRadius: 8,
-  background: 'rgba(3, 10, 22, 0.85)',
 };
 
 const navListStyle: CSSProperties = {

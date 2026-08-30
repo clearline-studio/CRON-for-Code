@@ -7,7 +7,6 @@ import {
   GraduationCap,
   House,
   LayoutTemplate,
-  Settings,
   ShieldAlert,
   ShieldCheck,
   type LucideIcon,
@@ -17,8 +16,7 @@ import { useWorkspaceStore } from '../context.js';
 // Polish round 2 + complete screens — the left edge is a strip of EIGHT
 // icon-only book-tabs: Home (centre view), Projects (project browser), Create
 // New (ACTION: runs the New-Project flow), Templates / My Apps / Deployments /
-// Learn (centre views), Settings (ACTION: opens ModelSettings). The Menu tab /
-// nav panel is gone (each section is its own tab now); the profile/account
+// Learn (centre views). Settings moved to the top bar. The Menu tab / nav panel
 // footer lives below the rail (ProfileFooter). Tabs show only their icon; the
 // section name reveals on hover as a small flyout label. There is deliberately
 // no "Files" tab.
@@ -29,8 +27,7 @@ export type LeftTabId =
   | 'templates'
   | 'my-apps'
   | 'deployments'
-  | 'learn'
-  | 'settings';
+  | 'learn';
 
 interface LeftTabDef {
   id: LeftTabId;
@@ -49,7 +46,6 @@ const LEFT_TABS: LeftTabDef[] = [
   { id: 'my-apps', label: 'My Apps', icon: Boxes },
   { id: 'deployments', label: 'Deployments', icon: CloudUpload },
   { id: 'learn', label: 'Learn', icon: GraduationCap },
-  { id: 'settings', label: 'Settings', icon: Settings, action: true },
 ];
 
 interface LeftTabStripProps {
@@ -94,7 +90,8 @@ export function LeftTabStrip({ active, onToggle, onOpenReview }: LeftTabStripPro
   }
 
   return (
-    <div style={stripStyle} aria-label="Left edge tabs" data-testid="left-tab-strip">
+    <div style={stripStyle} aria-label="Left navigation" data-testid="left-tab-strip">
+      <style>{leftTabStyles}</style>
       {LEFT_TABS.map((tab) => {
         const Icon = tab.icon;
         const isAction = !!tab.action;
@@ -112,10 +109,12 @@ export function LeftTabStrip({ active, onToggle, onOpenReview }: LeftTabStripPro
               type="button"
               onClick={() => onToggle(tab.id)}
               style={buttonStyle}
+              className={isActive ? 'cron-left-tab is-active' : isAction ? 'cron-left-tab is-action' : 'cron-left-tab'}
               aria-label={isAction ? tab.label : isActive ? `Close ${tab.label} panel` : `Open ${tab.label} panel`}
               data-testid={`left-tab-${tab.id}`}
             >
-              <Icon size={16} />
+              <Icon size={16} className="cron-left-tab-icon" />
+              <span style={tabLabelStyle}>{tab.label}</span>
             </button>
           </div>
         );
@@ -148,13 +147,13 @@ export function LeftTabStrip({ active, onToggle, onOpenReview }: LeftTabStripPro
 }
 
 const stripStyle: CSSProperties = {
-  width: 64,
+  width: 172,
   flexShrink: 0,
   minHeight: 0,
   display: 'flex',
   flexDirection: 'column',
-  gap: 6,
-  padding: '10px 6px',
+  gap: 4,
+  padding: '10px 8px 16px',
   boxSizing: 'border-box',
   background: 'rgba(4, 13, 28, 0.94)',
   borderRight: '1px solid rgba(100,160,255,.18)',
@@ -164,35 +163,47 @@ const stripStyle: CSSProperties = {
 const tabWrapStyle: CSSProperties = {
   position: 'relative',
   flexShrink: 0,
+  width: '100%',
 };
 
 const baseTabStyle: CSSProperties = {
   width: '100%',
-  height: 44,
-  display: 'grid',
-  placeItems: 'center',
+  height: 38,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 9,
+  padding: '0 11px',
   flexShrink: 0,
   border: '1px solid transparent',
-  borderRadius: 10,
+  borderRadius: 9,
   background: 'transparent',
-  color: '#8da4c7',
+  color: '#e8f0fb',
   cursor: 'pointer',
   fontFamily: 'var(--cron-font-family)',
+  fontSize: 12,
   boxSizing: 'border-box',
+  textAlign: 'left',
+};
+
+const tabLabelStyle: CSSProperties = {
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
 };
 
 const tabStyle: CSSProperties = {
   ...baseTabStyle,
-  color: '#8da4c7',
+  color: '#e8f0fb',
 };
 
-// Active panel tab: electric-blue treatment + subtle glow (spec §31).
+// Active panel tab: electric-blue treatment, a blue left-edge accent line, and a
+// subtle glow (spec §31). Text is bright white; the icon carries a blue halo.
 const activeTabStyle: CSSProperties = {
   ...baseTabStyle,
   color: '#ffffff',
   background: 'rgba(23, 107, 255, 0.18)',
   borderColor: 'rgba(31, 130, 255, 0.55)',
-  boxShadow: '0 0 12px rgba(23, 107, 255, 0.28)',
+  boxShadow: 'inset 3px 0 0 #1F82FF, 0 0 12px rgba(23, 107, 255, 0.28)',
 };
 
 // Create New / Settings read as primary actions: electric-blue tint, no panel state.
@@ -239,7 +250,7 @@ const shieldDividerStyle: CSSProperties = {
 const shieldWrapStyle: CSSProperties = {
   position: 'relative',
   flexShrink: 0,
-  padding: '8px 0 2px',
+  padding: '8px 0 4px',
   display: 'grid',
   placeItems: 'center',
 };
@@ -273,3 +284,14 @@ const shieldBadgeStyle: CSSProperties = {
   fontWeight: 800,
   boxShadow: '0 0 8px rgba(245,158,11,.6)',
 };
+
+// Scoped styles: a blue halo glow on the tab icons, brighter white text on the
+// active tab, and a gentle hover lift so the whole rail reads as interactive.
+const leftTabStyles = `
+  .cron-left-tab { transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease; }
+  .cron-left-tab:hover { background: rgba(23, 107, 255, 0.10); border-color: rgba(31, 130, 255, 0.35); }
+  .cron-left-tab.is-active { color: #ffffff; }
+  .cron-left-tab.is-active .cron-left-tab-icon { color: #9fc6ff; filter: drop-shadow(0 0 6px rgba(31,130,255,.75)); }
+  .cron-left-tab-icon { color: #c9d9f0; transition: color .15s ease, filter .15s ease; }
+  .cron-left-tab:not(.is-active):hover .cron-left-tab-icon { color: #bcd4ff; filter: drop-shadow(0 0 5px rgba(31,130,255,.5)); }
+`;

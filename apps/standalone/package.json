@@ -10,7 +10,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "vite build",
     "start": "electron .",
-    "package": "electron-builder --win",
+    "package": "pnpm --dir ../.. run build && electron-builder --win",
     "typecheck": "tsc --noEmit",
     "test": "echo ok",
     "lint": "echo ok",
