@@ -128,6 +128,16 @@ const DEFAULT_CODING_MODEL = 'opencode-go/deepseek-v4-flash-vision-exp';
 const DEFAULT_FALLBACK_MODEL = 'opencode-go/deepseek-v4-flash';
 const DEFAULT_ESCALATION_MODEL = 'deepseek/deepseek-v4-pro';
 
+// Governed session policy sent with every CRON session. Reads are allowed so
+// the agent can survey the project; any file edit or shell command ASKS — the
+// server exposes the pending permission, CRON surfaces it as an approval to
+// the user, and the session resumes only after the user decides.
+const GOVERNED_PERMISSION_POLICY: ReadonlyArray<{ permission: string; pattern: string; action: string }> = [
+  { permission: 'read', pattern: '*', action: 'allow' },
+  { permission: 'edit', pattern: '*', action: 'ask' },
+  { permission: 'bash', pattern: '*', action: 'ask' },
+];
+
 function newId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -198,20 +208,18 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
   }
 
   async function createSession(baseUrl: string, input: OpenCodeRunnerAdapterInput): Promise<string> {
-    const model = parseOpenCodeModel(input.model);
+    // NEW server protocol (1.18.25): session create accepts { title, permission }
+    // ONLY — a `model` (or agent/metadata) field is REJECTED with 400. The
+    // model rides on the MESSAGE level instead.
+    // Governed policy (CRON's gate): reads allowed, file edits + shell run ASK —
+    // every change surfaces as an approval request to the user; nothing writes
+    // silently. Verified against the real server (edit:ask surfaces in
+    // GET /permission; reply value is "once").
     const response = await postJson<{ id?: string }>(
       `${baseUrl}/session?directory=${encodeURIComponent(input.repoPath)}`,
       {
         title: input.task.title || 'CRON Code task',
-        agent: 'build',
-        // Session requests use the same model key as message sends: `modelID`
-        // (fixed 29 Aug — was `id`, which a live server rejects).
-        model: { providerID: model.providerID, modelID: model.modelID },
-        metadata: {
-          cronTaskId: input.task.id,
-          cronProjectId: input.project.id,
-          cronRepoPath: input.repoPath,
-        },
+        permission: GOVERNED_PERMISSION_POLICY,
       },
       openCodeServerAuthHeaders(),
     );
@@ -221,7 +229,7 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
 
   async function sendMessage(baseUrl: string, sessionId: string, messageId: string, input: OpenCodeRunnerAdapterInput): Promise<OpenCodeRunnerAdapterResult> {
     const model = parseOpenCodeModel(input.model);
-    const response = await postJson<{ info?: { id?: string }; parts?: unknown[] }>(
+    const response = await postJson<{ info?: { id?: string; tokens?: { output?: number; input?: number } }; parts?: unknown[] }>(
       `${baseUrl}/session/${encodeURIComponent(sessionId)}/message?directory=${encodeURIComponent(input.repoPath)}`,
       {
         messageID: messageId,
@@ -231,6 +239,20 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
       },
       openCodeServerAuthHeaders(),
     );
+    // Honesty guard: a refused/broken stream (e.g. gateway model opt-in error)
+    // returns a 200 response with ZERO tokens and no parts. Treating that as
+    // "completed" would fake a successful build — fail honestly instead.
+    const hasOutput = Array.isArray(response.parts) && response.parts.length > 0;
+    const outputTokens = response.info?.tokens?.output ?? 0;
+    if (!hasOutput && outputTokens === 0) {
+      return {
+        exitCode: 1,
+        stdout: '',
+        stderr: 'OpenCode session produced no output — the coding model did not run. Check the model route and gateway opt-in.',
+        summary: 'OpenCode session produced no output',
+        changedFiles: [],
+      };
+    }
     return {
       exitCode: 0,
       stdout: summarizeMessageResponse(response),

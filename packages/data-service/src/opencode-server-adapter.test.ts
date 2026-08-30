@@ -71,12 +71,16 @@ async function startMockOpenCodeServer(): Promise<MockOpenCodeServer> {
     };
 
     if (req.method === 'POST' && url.pathname === '/session') {
-      const parsed = body as { model?: { providerID?: string; modelID?: string } };
-      if (!parsed?.model?.providerID || !parsed?.model?.modelID) {
+      // NEW server protocol: session create = { title, permission } (no model).
+      const parsed = body as { title?: unknown; permission?: unknown; model?: unknown };
+      if (typeof parsed?.title !== 'string' || !Array.isArray(parsed?.permission)) {
+        return send(400, { _tag: 'BadRequest' });
+      }
+      if (parsed.model !== undefined) {
         return send(400, { _tag: 'BadRequest' });
       }
       sessionId = 'ses_mock_1';
-      return send(200, { id: sessionId, version: '1.18.16' });
+      return send(200, { id: sessionId, version: '1.18.25' });
     }
 
     if (req.method === 'POST' && url.pathname === `/session/${sessionId}/message`) {
@@ -211,7 +215,14 @@ describe('OpenCode server adapter (verified installed API)', () => {
       const sessionPost = mock.requests.find((r) => r.method === 'POST' && r.url.startsWith('/session?'));
       const messagePost = mock.requests.find((r) => r.method === 'POST' && r.url.includes('/message?'));
       const permissionGet = mock.requests.find((r) => r.method === 'GET' && r.url.startsWith('/permission?'));
-      expect(sessionPost?.body).toMatchObject({ model: { providerID: 'opencode-go', modelID: 'deepseek-v4-flash-vision-exp' } });
+      expect(sessionPost?.body).toMatchObject({
+        title: expect.any(String),
+        permission: expect.arrayContaining([
+          { permission: 'read', pattern: '*', action: 'allow' },
+          { permission: 'edit', pattern: '*', action: 'ask' },
+          { permission: 'bash', pattern: '*', action: 'ask' },
+        ]),
+      });
       expect(messagePost?.body).toMatchObject({ model: { providerID: 'opencode-go', modelID: 'deepseek-v4-flash-vision-exp' } });
       expect(permissionGet?.url).toContain('directory=');
 
