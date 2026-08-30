@@ -123,6 +123,14 @@ export interface OpenCodeRunnerOptions {
   readonly escalationModel?: string;
   /** Streams runner events as they occur (used for live/incremental UI activity). */
   readonly onEvent?: (event: OpenCodeRunEvent) => void;
+  /**
+   * Max quiet time before an attempt is treated as a stall and retried with the
+   * fallback. A hang produces events then goes silent forever (never throws), so
+   * the launch-failure fallback never fires. This window converts that silent
+   * hang into a launch failure WITHOUT killing genuinely slow builds that keep
+   * emitting heartbeats. Default 120s.
+   */
+  readonly stallTimeoutMs?: number;
 }
 
 const DEFAULT_CODING_MODEL = 'opencode-go/deepseek-v4-flash-vision-exp';
@@ -130,6 +138,16 @@ const DEFAULT_CODING_MODEL = 'opencode-go/deepseek-v4-flash-vision-exp';
 // not a real DeepSeek-API model (400) and the gateway's providerID is opencode-go.
 const DEFAULT_FALLBACK_MODEL = 'opencode-go/deepseek-v4-flash';
 const DEFAULT_ESCALATION_MODEL = 'deepseek/deepseek-v4-pro';
+
+// Default stall window before a silent-hanging attempt is treated as a launch
+// failure and retried with the fallback. Generous enough that a slow-but-alive
+// run (which keeps emitting heartbeat events) is never cut, but short enough
+// that a truly wedged gateway doesn't spin for the full 60-min ceiling.
+const DEFAULT_STALL_TIMEOUT_MS = 120_000;
+// Sentinel marking an attempt that stalled (produced no progress then went quiet)
+// as a LAUNCH failure, so the fallback retry fires. Distinguished from a legit
+// wait-timeout, which means "the session ran but was just slow" and must NOT fall back.
+const LAUNCH_STALL_ERROR = 'OpenCode stalled: no progress';
 
 // Governed session policy sent with every CRON session. Reads are allowed so
 // the agent can survey the project; any file edit or shell command ASKS — the
@@ -588,6 +606,38 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Rejects if `getLastProgress()` reports no activity within `windowMs`, while the
+ * wrapped promise is still unsettled. Uses a non-awaiting poll so it can never be
+ * the thing that resolves first in a healthy run. The settling of the wrapped
+ * promise always takes precedence (either resolving or rejecting normally).
+ */
+async function withStallGuard<T>(
+  promise: Promise<T>,
+  getLastProgress: () => number,
+  windowMs: number,
+  stallMessage: string,
+): Promise<T> {
+  if (windowMs <= 0) return promise;
+  let settled = false;
+  const guard = new Promise<never>((_, reject) => {
+    void (async () => {
+      while (!settled) {
+        if (Date.now() - getLastProgress() >= windowMs) {
+          settled = true;
+          reject(Object.assign(new Error(stallMessage), { launchFailure: true }));
+          return;
+        }
+        await delay(200);
+      }
+    })();
+  });
+  return Promise.race([
+    promise.finally(() => { settled = true; }),
+    guard,
+  ]);
+}
+
 function createOpenCodeCliAdapter(executable: string): OpenCodeRunnerAdapter {
   return {
     interfaceKind: 'cli',
@@ -770,6 +820,7 @@ export class OpenCodeRunner {
   private readonly fallbackModel: string;
   private readonly escalationModel: string;
   private readonly onEvent?: (event: OpenCodeRunEvent) => void;
+  private readonly stallTimeoutMs: number;
 
   constructor(options: OpenCodeRunnerOptions) {
     this.dataService = options.dataService;
@@ -778,6 +829,7 @@ export class OpenCodeRunner {
     this.fallbackModel = options.fallbackModel ?? DEFAULT_FALLBACK_MODEL;
     this.escalationModel = options.escalationModel ?? DEFAULT_ESCALATION_MODEL;
     this.onEvent = options.onEvent;
+    this.stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
   }
 
   private publish(event: OpenCodeRunEvent): void {
@@ -901,17 +953,33 @@ export class OpenCodeRunner {
     await this.audit('execution.started', task, executionId, repoPath, null);
 
     try {
-      const result = await this.adapter!.run(
-        {
-          task,
-          project,
-          repoPath,
-          request: task.prompt,
-          model,
-          conversationContext: input.conversationContext ?? [],
-        },
-        (event) => emit(event),
+      // Stall guard: a wedged gateway can hang the adapter promise forever without
+      // ever throwing (the launch-failure fallback never fires in that case). We
+      // track the last time the attempt made ANY progress (an event or a result),
+      // and if it goes quiet for the window we reject as a launch failure so the
+      // caller retries once with the fallback model. Slow-but-alive runs keep
+      // emitting heartbeats, so they are never falsely cut.
+      let lastProgressAt = Date.now();
+      const guard = withStallGuard(
+        this.adapter!.run(
+          {
+            task,
+            project,
+            repoPath,
+            request: task.prompt,
+            model,
+            conversationContext: input.conversationContext ?? [],
+          },
+          (event) => {
+            lastProgressAt = Date.now();
+            emit(event);
+          },
+        ),
+        () => lastProgressAt,
+        this.stallTimeoutMs,
+        `${LAUNCH_STALL_ERROR} for ${model} (${this.stallTimeoutMs}ms)`,
       );
+      const result = await guard;
       emit({ taskId: task.id, status: 'verifying', message: 'Capturing OpenCode runner result', model, runner: 'opencode' });
       const outcome = analyzeOpenCodeResult(result);
       let approval: OpenCodePermissionRequest | null = null;
@@ -971,7 +1039,10 @@ export class OpenCodeRunner {
       const err = toExecutionError(error);
       // A wait-timeout is NOT a launch failure: the session ran fine, it was
       // just slow. Falling back in that case would double the wait for nothing.
-      const launchFailure = !err.message.includes('Timed out waiting');
+      // A STALL (no progress for the window) IS a launch failure: the session
+      // wedged without ever throwing, and the fallback should get a clean shot.
+      const isStall = err.message.includes(LAUNCH_STALL_ERROR);
+      const launchFailure = !err.message.includes('Timed out waiting') || isStall;
       const record = createExecutionRecord({
         id: executionId,
         status: 'failed',

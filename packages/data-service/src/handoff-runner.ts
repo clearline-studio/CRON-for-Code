@@ -44,6 +44,8 @@ export interface HandoffRunnerOptions {
   readonly defaultModel?: string;
   readonly fallbackModel?: string;
   readonly escalationModel?: string;
+  /** Max quiet time before a silent-hung attempt retries with the fallback. */
+  readonly stallTimeoutMs?: number;
 }
 
 function newId(prefix: string): string {
@@ -79,6 +81,7 @@ export class HandoffRunner {
       defaultModel: options.defaultModel,
       fallbackModel: options.fallbackModel,
       escalationModel: options.escalationModel,
+      stallTimeoutMs: options.stallTimeoutMs,
     });
   }
 

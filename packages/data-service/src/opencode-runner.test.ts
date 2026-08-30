@@ -274,6 +274,40 @@ describe('OpenCodeRunner', () => {
     expect(buildCommandCatalogue().some((entry) => entry.id === 'opencode.runner')).toBe(false);
   });
 
+  it('falls back when the primary model STALLS silently (never throws) instead of spinning forever', async () => {
+    const taskId = await seed();
+    const base = completingAdapter();
+    let calls = 0;
+    const hanging: typeof base = {
+      executable: base.executable,
+      interfaceKind: base.interfaceKind,
+      async run(input, onEvent) {
+        calls += 1;
+        if (calls === 1) {
+          onEvent({ taskId: input.task.id, status: 'running', message: 'session created but gateway is wedged', model: input.model, runner: 'opencode' });
+          // Never settles: simulates a hung gateway long-poll.
+          await new Promise(() => {});
+        }
+        return base.run(input, onEvent);
+      },
+      async replyToPermission(input, onEvent) {
+        return base.replyToPermission!(input, onEvent);
+      },
+    };
+    const runner = new OpenCodeRunner({ dataService, adapter: hanging, stallTimeoutMs: 300 });
+    const result = await runner.runTask({ taskId });
+    // The stall on the primary must classify as a launch failure and retry the fallback.
+    expect(result.status).toBe('completed');
+    expect(result.model).toBe('opencode-go/deepseek-v4-flash');
+    // The stall event surfaces on the honest trail.
+    expect(result.events.some((event) => /fallback/i.test(event.message))).toBe(true);
+    // Two attempts recorded: first stalled (failed), second completed.
+    const executions = (await dataService.executions.listAll()).sort((a, b) => a.startedAt - b.startedAt);
+    expect(executions).toHaveLength(2);
+    expect(executions[0]?.status).toBe('failed');
+    expect(executions[1]?.status).toBe('completed');
+  });
+
   it('streams runner events to the onEvent subscription as they occur (incremental UI activity)', async () => {
     const taskId = await seed();
     const received: Array<{ status: string; timestamp: number }> = [];
