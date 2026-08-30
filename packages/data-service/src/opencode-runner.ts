@@ -196,21 +196,6 @@ interface OpenCodeServerSession {
   readonly messagePromise: Promise<OpenCodeRunnerAdapterResult>;
 }
 
-function openCodeServerAuthHeaders(): Record<string, string> {
-  // Prefer an explicitly configured credential; otherwise use the per-run
-  // password the runner generates when IT spawns the server (see ensureServer).
-  const password = generatedServerPassword ?? process.env.OPENCODE_SERVER_PASSWORD;
-  if (!password) return {};
-  const username = generatedServerUsername ?? process.env.OPENCODE_SERVER_USERNAME ?? 'opencode';
-  return { authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}` };
-}
-
-// Vars set by the running adapter's ensureServer so requests carry the same
-// credential the spawned server was started with (1.18.25 serves require auth;
-// without it every request 401s).
-let generatedServerPassword: string | null = null;
-let generatedServerUsername: string | null = null;
-
 export interface OpenCodeServerAdapterOptions {
   /** Pre-provisioned OpenCode server base URL (skips spawning and health wait). */
   readonly baseUrl?: string;
@@ -221,6 +206,22 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
     ? { baseUrl: options.baseUrl, process: null as unknown as ChildProcess }
     : null;
   const sessions = new Map<string, OpenCodeServerSession>();
+  // Per-instance server credentials. The running server requires Basic auth; the
+  // password MUST be the exact one THIS instance spawned the server with. Keeping
+  // it closure-scoped (not module-global) prevents a stale password from a
+  // different server instance mismatching — which made /permission 401 and
+  // silently wedge (the getSessionPermission catch swallowed it).
+  const serverAuth: { password: string | null; username: string | null } = {
+    password: null,
+    username: null,
+  };
+
+  function authHeaders(): Record<string, string> {
+    const password = serverAuth.password ?? process.env.OPENCODE_SERVER_PASSWORD;
+    if (!password) return {};
+    const username = serverAuth.username ?? process.env.OPENCODE_SERVER_USERNAME ?? 'opencode';
+    return { authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}` };
+  }
 
   async function ensureServer(cwd: string): Promise<string> {
     if (server) return server.baseUrl;
@@ -228,9 +229,9 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
     // Credentials: prefer the environment's (the app can inherit them from its
     // parent process); otherwise generate one so the spawned server and every
     // request share it — the 1.18.25 server requires auth either way.
-    if (!generatedServerPassword) {
-      generatedServerPassword = process.env.OPENCODE_SERVER_PASSWORD ?? `cron-${Math.random().toString(36).slice(2, 12)}`;
-      generatedServerUsername = process.env.OPENCODE_SERVER_USERNAME ?? 'opencode';
+    if (!serverAuth.password) {
+      serverAuth.password = process.env.OPENCODE_SERVER_PASSWORD ?? `cron-${Math.random().toString(36).slice(2, 12)}`;
+      serverAuth.username = process.env.OPENCODE_SERVER_USERNAME ?? 'opencode';
     }
     const child = spawn(executable, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
       cwd,
@@ -239,13 +240,13 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        OPENCODE_SERVER_PASSWORD: generatedServerPassword,
-        OPENCODE_SERVER_USERNAME: generatedServerUsername ?? 'opencode',
+        OPENCODE_SERVER_PASSWORD: serverAuth.password,
+        OPENCODE_SERVER_USERNAME: serverAuth.username ?? 'opencode',
       },
     });
     const launched = { baseUrl: `http://127.0.0.1:${port}`, process: child };
     server = launched;
-    await waitForHealth(launched.baseUrl);
+    await waitForHealth(launched.baseUrl, authHeaders());
     return launched.baseUrl;
   }
 
@@ -263,13 +264,13 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
         title: input.task.title || 'CRON Code task',
         permission: GOVERNED_PERMISSION_POLICY,
       },
-      openCodeServerAuthHeaders(),
+      authHeaders(),
     );
     if (!response.id) throw new Error('OpenCode server did not return a session id');
     return response.id;
   }
 
-  async function sendMessage(baseUrl: string, sessionId: string, messageId: string, input: OpenCodeRunnerAdapterInput): Promise<OpenCodeRunnerAdapterResult> {
+  async function sendMessage(baseUrl: string, sessionId: string, messageId: string, input: OpenCodeRunnerAdapterInput, headers: Record<string, string>): Promise<OpenCodeRunnerAdapterResult> {
     const model = parseOpenCodeModel(input.model);
     const response = await postJson<{ info?: { id?: string; tokens?: { output?: number; input?: number } }; parts?: unknown[] }>(
       `${baseUrl}/session/${encodeURIComponent(sessionId)}/message?directory=${encodeURIComponent(input.repoPath)}`,
@@ -283,7 +284,7 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
         // request surfaces the permission ask within seconds).
         parts: [{ type: 'text', text: input.request }],
       },
-      openCodeServerAuthHeaders(),
+      headers,
     );
     // Honesty guard: a refused/broken stream (e.g. gateway model opt-in error)
     // returns a 200 response with ZERO tokens and no parts. Treating that as
@@ -304,7 +305,7 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
       stdout: summarizeMessageResponse(response),
       stderr: '',
       summary: 'OpenCode server session completed',
-      changedFiles: await listSessionDiff(baseUrl, sessionId, input.repoPath),
+      changedFiles: await listSessionDiff(baseUrl, sessionId, input.repoPath, headers),
     };
   }
 
@@ -316,9 +317,9 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
       const sessionId = await createSession(baseUrl, input);
       const messageId = newId('msg');
       onEvent({ taskId: input.task.id, status: 'running', message: `OpenCode server session ${sessionId} created`, model: input.model, runner: 'opencode' });
-      const messagePromise = sendMessage(baseUrl, sessionId, messageId, input);
+      const messagePromise = sendMessage(baseUrl, sessionId, messageId, input, authHeaders());
       sessions.set(sessionId, { sessionId, messageId, taskId: input.task.id, model: input.model, repoPath: input.repoPath, permissionFilepath: null, messagePromise });
-      const pending = await waitForPermissionOrCompletion(baseUrl, sessionId, input.repoPath, messagePromise, { taskId: input.task.id, model: input.model }, onEvent);
+      const pending = await waitForPermissionOrCompletion(baseUrl, sessionId, input.repoPath, messagePromise, { taskId: input.task.id, model: input.model }, onEvent, authHeaders());
       if (pending) {
         sessions.set(sessionId, { sessionId, messageId, taskId: input.task.id, model: input.model, repoPath: input.repoPath, permissionFilepath: pending.metadata?.filepath ?? null, messagePromise });
         return {
@@ -353,7 +354,7 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
           reply: input.decision === 'approve' ? 'once' : 'reject',
           message: input.reason,
         },
-        openCodeServerAuthHeaders(),
+        authHeaders(),
       );
       onEvent({ taskId: input.taskId, status: input.decision === 'approve' ? 'running' : 'cancelled', message: `OpenCode permission ${input.permissionId} answered in session ${input.sessionId}`, model: pending.model, runner: 'opencode' });
       if (input.decision === 'reject') {
@@ -367,6 +368,7 @@ export function createOpenCodeServerAdapter(executable: string, options: OpenCod
         pending.messagePromise,
         { taskId: input.taskId, model: pending.model },
         onEvent,
+        authHeaders(),
         input.permissionId,
       );
       if (completion) {
@@ -426,9 +428,9 @@ function summarizeMessageResponse(response: unknown): string {
   return text || 'OpenCode server completed';
 }
 
-async function listSessionDiff(baseUrl: string, sessionId: string, repoPath: string): Promise<string[]> {
+async function listSessionDiff(baseUrl: string, sessionId: string, repoPath: string, headers: Record<string, string>): Promise<string[]> {
   try {
-    const diff = await getJson<unknown[]>(`${baseUrl}/session/${encodeURIComponent(sessionId)}/diff?directory=${encodeURIComponent(repoPath)}`, openCodeServerAuthHeaders());
+    const diff = await getJson<unknown[]>(`${baseUrl}/session/${encodeURIComponent(sessionId)}/diff?directory=${encodeURIComponent(repoPath)}`, headers);
     return diff
       .map((item) => item && typeof item === 'object' ? String((item as { path?: string; file?: string }).path ?? (item as { file?: string }).file ?? '') : '')
       .filter(Boolean);
@@ -454,6 +456,7 @@ async function waitForPermissionOrCompletion(
   messagePromise: Promise<OpenCodeRunnerAdapterResult>,
   input: { taskId: string; model: string },
   onEvent: (event: Omit<OpenCodeRunEvent, 'timestamp'>) => void,
+  headers: Record<string, string>,
   skipPermissionId?: string,
 ): Promise<OpenCodePendingPermission | null> {
   const startedAt = Date.now();
@@ -461,8 +464,21 @@ async function waitForPermissionOrCompletion(
   let lastHeartbeatAt = startedAt;
   // Governed builds can legitimately run long (slow gateway models). 60 min
   // ceiling; the user cancels via the app's own cancel path.
+  let permissionErrors = 0;
   while (Date.now() - startedAt < 60 * 60 * 1000) {
-      const permission = await getSessionPermission(baseUrl, sessionId, repoPath);
+      let permission: OpenCodePendingPermission | null = null;
+      try {
+        permission = await getSessionPermission(baseUrl, sessionId, repoPath, headers);
+        permissionErrors = 0;
+      } catch (error) {
+        // A broken /permission (auth or transport) would otherwise silently wedge
+        // the loop for the full ceiling. Allow a short recovery window, then fail
+        // honestly so it never spins forever on a 401 we can't recover from.
+        permissionErrors += 1;
+        if (permissionErrors > 5) {
+          throw new Error(`OpenCode /permission poll failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+        }
+      }
       if (permission && permission.id !== skipPermissionId) {
         onEvent({ taskId: input.taskId, status: 'awaiting_approval', message: `OpenCode requests ${permission.action} ${permission.resources.join(', ')}`, model: input.model, runner: 'opencode' });
         return permission;
@@ -504,10 +520,15 @@ interface OpenCodePermissionItem {
   readonly metadata?: { filepath?: string | null; diff?: string | null };
 }
 
-async function getSessionPermission(baseUrl: string, sessionId: string, repoPath: string): Promise<OpenCodePendingPermission | null> {
+async function getSessionPermission(baseUrl: string, sessionId: string, repoPath: string, headers: Record<string, string>): Promise<OpenCodePendingPermission | null> {
+  // Do NOT silently swallow a transport/auth failure: a healthy server that has
+  // no pending permission returns an empty array; a 401/network error means the
+  // request is broken and would otherwise wedge the wait loop for the full
+  // ceiling. Distinguish the two so a broken /permission fails honestly.
   const data = await getJson<OpenCodePermissionItem[] | { data?: OpenCodePermissionItem[] }>(
     `${baseUrl}/permission?directory=${encodeURIComponent(repoPath)}`,
-  ).catch(() => null);
+    headers,
+  );
   const permissions = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
   const item = permissions.find((permission) => permission?.sessionID === sessionId) ?? permissions[0] ?? null;
   if (!item) return null;
@@ -539,11 +560,11 @@ function canListen(port: number): Promise<boolean> {
   });
 }
 
-async function waitForHealth(baseUrl: string): Promise<void> {
+async function waitForHealth(baseUrl: string, headers: Record<string, string>): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 15000) {
     try {
-      const health = await getJson<{ healthy?: boolean }>(`${baseUrl}/global/health`, openCodeServerAuthHeaders());
+      const health = await getJson<{ healthy?: boolean }>(`${baseUrl}/global/health`, headers);
       if (health.healthy) return;
     } catch {
       // keep polling while the server boots
