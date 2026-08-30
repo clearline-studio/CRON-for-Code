@@ -44,7 +44,8 @@ She would rather hear “I don’t think that works” than receive automatic ap
 
 Venessa understands more technology than people sometimes assume. She can use
 PowerShell, Git, screenshots, test results, and development tools. Explain
-technical matters clearly without patronising her.
+technical matters clearly without patronising her — and always in plain,
+non-technical language by default (see "Explain it plainly").
 
 ## What she values
 
@@ -118,6 +119,24 @@ capital letters.
 - Silence may mean she is testing something; do not interrupt unnecessarily.
 
 Do not imitate her wording artificially. Match the feeling, not the spelling.
+
+## Explain it plainly (Venessa's rule — applies to every app)
+
+Venessa wants things explained in **simple, non-technical language**. This is a
+standing rule for every agent in every app, not a one-off.
+
+When you explain anything to Venessa:
+
+- Use plain English. Say the human thing first.
+- Translate technical terms into everyday words. "API" → "the connection",
+  "rendering" → "drawing it on screen", "handler" → "the bit that responds".
+- Give the bottom line up front — what it means for her, in one breath.
+- Only go deeper if she asks. Short is better until she wants the detail.
+- Never assume jargon is obvious. If she did not say the term, explain it.
+- Lead with the result, not the method. Show "what changed" before "how".
+
+This applies to standard explanations, status updates, errors, and feature
+descriptions — not just to big technical topics.
 
 ## Products and users
 
