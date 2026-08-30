@@ -24,6 +24,10 @@ export type {
   OpenCodeRunnerOptions,
   OpenCodeServerAdapterOptions,
 } from './opencode-runner.js';
+export { HandoffRunner } from './handoff-runner.js';
+export type { HandoffRunnerOptions } from './handoff-runner.js';
+export { createHandoffHttpServer } from './handoff-server.js';
+export type { HandoffHttpServer, HandoffHttpServerOptions } from './handoff-server.js';
 export {
   resolveProjectRoot,
   assertPathInsideProject,

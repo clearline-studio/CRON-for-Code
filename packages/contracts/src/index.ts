@@ -20,6 +20,31 @@ export type { HostContext, HostCapabilities } from './host.js';
 export { createHostContext } from './host.js';
 
 export type {
+  HandoffRequest,
+  HandoffResult,
+  HandoffProject,
+  HandoffContext,
+  HandoffAttachment,
+  HandoffAttachmentKind,
+  HandoffApprovalRequest,
+  HandoffApprovalAction,
+  HandoffChangedFile,
+  HandoffChangedFileStatus,
+  HandoffEvidence,
+  HandoffEvidenceKind,
+  HandoffError,
+  HandoffStatus,
+  HandoffApprovalReply,
+} from './handoff.js';
+export {
+  createHandoffRequest,
+  createHandoffResult,
+  isHandoffRequest,
+  isHandoffResult,
+  isHandoffApprovalReply,
+} from './handoff.js';
+
+export type {
   ExecutionStatus,
   ExecutionErrorCode,
   CommandCategory,

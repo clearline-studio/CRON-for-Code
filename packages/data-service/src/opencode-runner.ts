@@ -105,6 +105,8 @@ export interface OpenCodeRunResult {
   readonly executionId: string | null;
   readonly record: ExecutionRecord | null;
   readonly approval: OpenCodePermissionRequest | null;
+  /** Files the run created/modified/deleted. Populated when the adapter reports them. */
+  readonly changedFiles: readonly string[];
 }
 
 export interface OpenCodeApprovalReplyResult extends OpenCodeRunResult {
@@ -826,6 +828,7 @@ export class OpenCodeRunner {
         executionId,
         record,
         approval: null,
+        changedFiles: [],
       };
     };
 
@@ -961,6 +964,7 @@ export class OpenCodeRunner {
         executionId,
         record,
         approval,
+        changedFiles: result.changedFiles ?? [],
         launchFailure: false,
       };
     } catch (error) {
@@ -1001,6 +1005,7 @@ export class OpenCodeRunner {
         executionId,
         record,
         approval: null,
+        changedFiles: [],
         launchFailure,
       };
     }
@@ -1144,7 +1149,7 @@ export class OpenCodeRunner {
     await this.dataService.tasks.updateStatus(task.id, outcome.status === 'completed' ? 'completed' : 'failed', outcome.status === 'completed' ? undefined : record.error?.message);
     await this.audit(outcome.status === 'completed' ? 'execution.completed' : 'execution.failed', task, record.id, record.cwd, record.error?.code ?? null);
     emit({ taskId: task.id, status: outcome.status, message: outcome.summary, model, runner: 'opencode' });
-    return this.replyResult(input, task, approval, model, events, record, outcome.status, outcome.summary, outcome.status === 'completed' ? null : outcome.summary);
+    return this.replyResult(input, task, approval, model, events, record, outcome.status, outcome.summary, outcome.status === 'completed' ? null : outcome.summary, undefined, result.changedFiles ?? []);
   }
 
   private async resolveExecutionStartedAt(executionId: string): Promise<number> {
@@ -1163,6 +1168,7 @@ export class OpenCodeRunner {
     summary: string,
     blocker: string | null,
     approvalRequest?: OpenCodePermissionRequest,
+    changedFiles: readonly string[] = [],
   ): OpenCodeApprovalReplyResult {
     const approval = approvalRequest ?? {
       approvalId: input.approvalId,
@@ -1189,6 +1195,7 @@ export class OpenCodeRunner {
       approval,
       approvalId: input.approvalId,
       decision: input.decision,
+      changedFiles,
     };
   }
 

@@ -12,6 +12,7 @@ import {
   OpenCodeRunner,
   SafeExecutionHarness,
   ProjectManagementService,
+  createHandoffHttpServer,
   assertKnownCommandId,
   assertTaskId,
   assertExecutionId,
@@ -77,6 +78,8 @@ let tray = null;
 let dataService = null;
 let executionService = null;
 let openCodeRunner = null;
+/** Optional Intelligence->Code bridge server. Only started when CRON_CODE_HANDOFF=1. */
+let handoffServer = null;
 let projectManagement = null;
 let isQuitting = false;
 let isRestarting = false;
@@ -1615,6 +1618,25 @@ if (!app.requestSingleInstanceLock()) {
         logger.warn('Execution recovery failed', { error: String(err) });
       });
     });
+    // Intelligence->Code bridge (live handoff path). Opt-in only: exposing a
+    // network listener should never happen by default. Start it when
+    // CRON_CODE_HANDOFF=1; require a shared secret unless one is explicitly set.
+    if (process.env.CRON_CODE_HANDOFF === '1') {
+      const ds = await ensureDataService();
+      void createHandoffHttpServer({
+        dataService: ds,
+        defaultModel: DEFAULT_MODEL_CONFIG.cloud.codingModel,
+        token: process.env.CRON_CODE_HANDOFF_TOKEN || '',
+        port: Number(process.env.CRON_CODE_HANDOFF_PORT || 0),
+      })
+        .then((server) => {
+          handoffServer = server;
+          logger.info(`[HANDOFF] Intelligence bridge listening at ${server.baseUrl}`);
+        })
+        .catch((err) => {
+          logger.error('[HANDOFF] Failed to start Intelligence bridge', { error: String(err) });
+        });
+    }
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
@@ -1632,6 +1654,10 @@ app.on('before-quit', (event) => {
     const cleanup = [];
     if (dataService) {
       cleanup.push(dataService.destroy());
+    }
+    if (handoffServer) {
+      cleanup.push(handoffServer.close().catch(() => undefined));
+      handoffServer = null;
     }
     if (tray) {
       cleanup.push(Promise.resolve().then(() => {
