@@ -1,7 +1,48 @@
 ﻿
 ---
 
-## 2026-08-30 - Intelligence-parity header + sidebar + canvas lock + splash fix
+## 2026-08-30 (evening) — Live-test trial round: OpenCode integration fixes
+
+Trial setup: CRON for Code was asked to actually build an app (test app = "CRON for Sorter").
+Venessa tests; this Gem diagnoses + fixes from the shell; loop until it behaves. A scratch
+repo (temp, git-inited) was used for the trial — nothing real touched.
+
+Bugs found by the trial + fixed (3 commits: ebebe02, aa44815, 2fc5182):
+- **400 BadRequest root cause**: opencode server 1.18.25 rejects session-create bodies
+  containing `model` (model rides on the MESSAGE level). Probed the live server to
+  discover the correct protocol: session = { title, permission }, message =
+  { messageID, agent: 'build', model: {providerID, modelID}, parts }.
+- **Governed policy shipped**: reads allow, edit + bash ASK — every write surfaces to
+  the user (verified: pending ask visible at GET /permission; reply value "once").
+- **agent=build** beats the machine-wide 'gem' config leak.
+- **Honesty guard**: empty/refused streams FAIL instead of fake-completing (a model
+  opt-in error previously reported "completed" with no work done).
+- **Undici timeouts**: default 300s headers timeout killed EVERY long run at ~5 min
+  (UND_ERR_HEADERS_TIMEOUT) — disabled + Agent pool 200 connections (the message
+  long-poll held the only pool connection and starved the /permission polls).
+- **Raw task prompt**: the CRON wrapper prompt caused zero-token inactivity; the bare
+  request surfaces the permission ask in seconds (A/B verified).
+- **Server auth self-sufficiency**: runner now spawns its own serve with a password
+  (env-preferred) and sends it on every request — the shortcut launch lacks the env.
+- **Executable discovery prefers the real opencode.exe** over the .cmd wrapper.
+- **model route**: vision Flash (opencode-go/deepseek-v4-flash-vision-exp) primary +
+  gateway plain Flash fallback; DeepSeek gateway models needed Venessa's one-time
+  opt-in (found the link in the server error; she clicked it).
+- **UI fixes in the round**: right-click select/copy/paste on non-editable text;
+  duplicate-folder flag (serialized project open + visible notice chip, store race
+  fixed — two same-tick opens created two projects).
+- Verified: data-service suite green (mock protocol aligned to the real 1.18.25 wire),
+  core 223+ tests, typecheck/lint clean. Fallback verified live twice.
+
+**Parked (next round):** intermittent gateway flakes — vision Flash occasionally fails
+at launch; long streams can still be cut mid-run. Options: instrument inside the app
+(devtools/main-process logging) or move to CLI-attach mode (opencode run --continue).
+
+**Next step:** re-run the live trial (app relaunched with the fixes); Venessa sends a
+real Sorter request; continue the fix loop.
+
+---
+
 
 Venessa's live-feedback loop on the running app (she's driving the look, I drive the code):
 
