@@ -248,14 +248,14 @@ describe('CronAssistant', () => {
     expect(screen.getAllByText(/Fix tests/).length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getAllByText('Needs attention').length).toBeGreaterThan(0));
     expect(screen.getAllByTestId('opencode-execution-card')).toHaveLength(1);
-    expect(screen.getByText('Executor: DeepSeek V4 Flash Vision')).toBeTruthy();
+    expect(screen.getByText('Executor: DeepSeek V4 Flash')).toBeTruthy();
     expect(screen.getAllByText('OpenCode unavailable').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Runner interface:/)).toBeNull();
     // The duplicate technical Details list was removed from the normal surface (Part 9):
     // technical evidence lives in Review, never duplicated in the conversational card.
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByText(/No runner events yet\./)).toBeNull();
-    expect(openCodeRunner.runTask).toHaveBeenCalledWith(expect.objectContaining({ model: 'opencode-go/deepseek-v4-flash-vision-exp' }));
+    expect(openCodeRunner.runTask).toHaveBeenCalledWith(expect.objectContaining({ model: 'opencode-go/deepseek-v4-flash' }));
   });
 
   it('publishes live activity incrementally as runner events arrive (no bulk dump)', async () => {

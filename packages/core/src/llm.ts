@@ -4,6 +4,7 @@ export interface CloudLlmConfig {
   chatModel: string;
   visionModel: string;
   codingModel: string;
+  codingVisionModel: string;
   escalationModel: string;
 }
 

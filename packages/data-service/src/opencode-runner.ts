@@ -41,6 +41,8 @@ export interface OpenCodeRunInput {
   readonly taskId: string;
   readonly model?: string;
   readonly conversationContext?: readonly { role: 'user' | 'assistant'; content: string }[];
+  /** When true, the task needs image input and should run on the vision model. */
+  readonly needsVision?: boolean;
 }
 
 export interface OpenCodeRunnerAdapterInput {
@@ -120,6 +122,8 @@ export interface OpenCodeRunnerOptions {
   readonly defaultModel?: string;
   /** Model used only if the primary model fails to launch (session-level). */
   readonly fallbackModel?: string;
+  /** Vision-capable model, used only when a task needs image input. Never default. */
+  readonly visionModel?: string;
   readonly escalationModel?: string;
   /** Streams runner events as they occur (used for live/incremental UI activity). */
   readonly onEvent?: (event: OpenCodeRunEvent) => void;
@@ -133,7 +137,11 @@ export interface OpenCodeRunnerOptions {
   readonly stallTimeoutMs?: number;
 }
 
-const DEFAULT_CODING_MODEL = 'opencode-go/deepseek-v4-flash-vision-exp';
+// Plain Flash is the reliable default coder (surfaces governed permissions fast).
+// Vision Flash is ONLY selected when a task actually needs image input — never the
+// default coder — because it intermittently wedges on the gateway long-poll.
+const DEFAULT_CODING_MODEL = 'opencode-go/deepseek-v4-flash';
+const DEFAULT_VISION_MODEL = 'opencode-go/deepseek-v4-flash-vision-exp';
 // NOTE: the fallback MUST be a gateway model id — deepseek/deepseek-v4-flash is
 // not a real DeepSeek-API model (400) and the gateway's providerID is opencode-go.
 const DEFAULT_FALLBACK_MODEL = 'opencode-go/deepseek-v4-flash';
@@ -831,6 +839,7 @@ export class OpenCodeRunner {
   private readonly adapter: OpenCodeRunnerAdapter | null;
   private readonly defaultModel: string;
   private readonly fallbackModel: string;
+  private readonly visionModel: string;
   private readonly escalationModel: string;
   private readonly onEvent?: (event: OpenCodeRunEvent) => void;
   private readonly stallTimeoutMs: number;
@@ -840,6 +849,7 @@ export class OpenCodeRunner {
     this.adapter = options.adapter === undefined ? discoverOpenCodeCli() : options.adapter;
     this.defaultModel = options.defaultModel ?? DEFAULT_CODING_MODEL;
     this.fallbackModel = options.fallbackModel ?? DEFAULT_FALLBACK_MODEL;
+    this.visionModel = options.visionModel ?? DEFAULT_VISION_MODEL;
     this.escalationModel = options.escalationModel ?? DEFAULT_ESCALATION_MODEL;
     this.onEvent = options.onEvent;
     this.stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
@@ -850,7 +860,10 @@ export class OpenCodeRunner {
   }
 
   async runTask(input: OpenCodeRunInput): Promise<OpenCodeRunResult> {
-    const model = (input.model || this.defaultModel).trim();
+    // Auto-switch: an explicit `model` always wins; otherwise a task that needs
+    // vision runs on the vision model, and everything else runs on the reliable
+    // plain-Flash default. The vision model is never the default coder.
+    const model = (input.model || (input.needsVision ? this.visionModel : this.defaultModel)).trim();
     const events: OpenCodeRunEvent[] = [];
     const emit = (event: Omit<OpenCodeRunEvent, 'timestamp'>): void => {
       const fullEvent: OpenCodeRunEvent = { ...event, timestamp: Date.now() };
@@ -904,7 +917,8 @@ export class OpenCodeRunner {
     if (model === this.escalationModel) {
       return block(task, task.projectId, 'DeepSeek V4 Pro escalation was requested but explicit escalation approval is not implemented in this slice');
     }
-    if (model !== this.defaultModel) {
+    const allowedModels = new Set([this.defaultModel, this.visionModel]);
+    if (!allowedModels.has(model)) {
       return block(task, task.projectId, `Coding model is not allowed for this runner: ${model}`);
     }
     if (!['draft', 'queued', 'approval_required', 'failed', 'blocked'].includes(task.status)) {
@@ -931,12 +945,14 @@ export class OpenCodeRunner {
       return block(task, task.projectId, 'OpenCode execution interface is not available on PATH or configured as a headless runner');
     }
 
-    // Model fallback (30 Aug): the primary is the vision Flash via the OpenCode
-    // gateway; if it cannot even LAUNCH a session (gateway/auth/model issue),
-    // retry ONCE with the known-good flash fallback. Only launch-level failures
-    // fall back — permission waits and real tool failures never do.
+    // Model fallback: the primary is the default coder (plain Flash) or, for a
+    // vision task, the vision model. If the primary cannot reach a permission or a
+    // result within the deadline (launch-level failure), retry ONCE with the
+    // known-good plain-Flash fallback. For a vision task this trades vision for
+    // reliability so the build still completes. Only launch-level failures fall
+    // back — permission waits and real tool failures never do.
     const attemptModels: string[] = [model];
-    if (model === this.defaultModel && this.fallbackModel !== model) {
+    if (model !== this.fallbackModel && model !== this.escalationModel) {
       attemptModels.push(this.fallbackModel);
     }
 

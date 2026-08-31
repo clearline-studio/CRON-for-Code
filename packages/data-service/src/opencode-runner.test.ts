@@ -116,7 +116,8 @@ describe('OpenCodeRunner', () => {
     const runner = new OpenCodeRunner({ dataService, adapter: completingAdapter() });
     const result = await runner.runTask({ taskId });
     expect(result.status).toBe('completed');
-    expect(result.model).toBe('opencode-go/deepseek-v4-flash-vision-exp');
+    // Default coder is the reliable plain Flash (not the wedgy vision model).
+    expect(result.model).toBe('opencode-go/deepseek-v4-flash');
     expect(result.runnerInterface).toBe('test');
     expect((await dataService.tasks.get(taskId))?.status).toBe('completed');
     expect((await dataService.executions.listAll())[0].commandId).toBe('opencode.runner');
@@ -229,16 +230,23 @@ describe('OpenCodeRunner', () => {
     expect(result.blocker).toContain('OpenCode execution interface is not available');
   });
 
-  it('uses the vision Flash by default (OpenCode gateway) and never silently selects V4 Pro', async () => {
+  it('uses the reliable plain-Flash as the default coder and never silently selects V4 Pro', async () => {
     const taskId = await seed();
     const runner = new OpenCodeRunner({ dataService, adapter: completingAdapter() });
-    expect((await runner.runTask({ taskId })).model).toBe('opencode-go/deepseek-v4-flash-vision-exp');
+    expect((await runner.runTask({ taskId })).model).toBe('opencode-go/deepseek-v4-flash');
     const pro = await runner.runTask({ taskId, model: 'deepseek/deepseek-v4-pro' });
     expect(pro.status).toBe('blocked');
     expect(pro.blocker).toContain('explicit escalation approval');
   });
 
-  it('falls back to DeepSeek V4 Flash when the vision model cannot launch (one retry, honest trail)', async () => {
+  it('auto-switches to the vision model when a task needs image input', async () => {
+    const taskId = await seed();
+    const runner = new OpenCodeRunner({ dataService, adapter: completingAdapter() });
+    const result = await runner.runTask({ taskId, needsVision: true });
+    expect(result.model).toBe('opencode-go/deepseek-v4-flash-vision-exp');
+  });
+
+  it('falls back to plain Flash when the vision model cannot launch (one retry, honest trail)', async () => {
     const taskId = await seed();
     const base = completingAdapter();
     let calls = 0;
@@ -257,7 +265,8 @@ describe('OpenCodeRunner', () => {
       },
     };
     const runner = new OpenCodeRunner({ dataService, adapter: flaky });
-    const result = await runner.runTask({ taskId });
+    // A vision task tries the vision model first; a launch failure retries plain Flash.
+    const result = await runner.runTask({ taskId, needsVision: true });
     expect(result.status).toBe('completed');
     expect(result.model).toBe('opencode-go/deepseek-v4-flash');
     // The fallback event is visible on the trail.
@@ -301,7 +310,9 @@ describe('OpenCodeRunner', () => {
       },
     };
     const runner = new OpenCodeRunner({ dataService, adapter: hanging, stallTimeoutMs: 300 });
-    const result = await runner.runTask({ taskId });
+    // A vision task runs the vision model first; a heartbeat-wedged vision model
+    // must hit the deadline and fall back to plain Flash.
+    const result = await runner.runTask({ taskId, needsVision: true });
     // The stall on the primary must classify as a launch failure and retry the fallback.
     expect(result.status).toBe('completed');
     expect(result.model).toBe('opencode-go/deepseek-v4-flash');

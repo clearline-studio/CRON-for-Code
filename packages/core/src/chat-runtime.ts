@@ -26,9 +26,12 @@ export const DEFAULT_LLM_CONFIG: LlmConfig = {
     apiKey: '',
     chatModel: 'deepseek/deepseek-v4-flash',
     visionModel: 'qwen/qwen-2-vl-7b-instruct',
-    // The coding model label tracks the OpenCode runner default (30 Aug): the
-    // vision Flash via the OpenCode gateway, with the plain Flash fallback.
-    codingModel: 'opencode-go/deepseek-v4-flash-vision-exp',
+    // Coding model is the reliable plain-Flash gateway model (default coder).
+    // The vision-Flash coder is used only when a task needs image input (auto
+    // switch) — never the default, because it intermittently wedges on the
+    // gateway long-poll.
+    codingModel: 'opencode-go/deepseek-v4-flash',
+    codingVisionModel: 'opencode-go/deepseek-v4-flash-vision-exp',
     escalationModel: 'deepseek/deepseek-v4-pro',
   },
   ollama: {

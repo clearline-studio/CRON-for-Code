@@ -55,10 +55,13 @@ const DEFAULT_MODEL_CONFIG = {
     apiKey: '',
     chatModel: 'deepseek/deepseek-v4-flash',
     visionModel: 'qwen/qwen-2-vl-7b-instruct',
-    // Coding model tracks the OpenCode runner default: the vision Flash via the
-    // OpenCode gateway (30 Aug). NOTE: deepseek-v4-flash is a GATEWAY model id,
-    // not a DeepSeek-API model — the old default 400'd against the real server.
-    codingModel: 'opencode-go/deepseek-v4-flash-vision-exp',
+    // Coding model is the reliable plain-Flash gateway model (default coder).
+    // The vision-Flash model is used only when a task needs image input (see the
+    // runner's auto-switch) — it is never the default coder because it
+    // intermittently wedges on the gateway long-poll. NOTE: deepseek-v4-flash is
+    // a GATEWAY model id, not a DeepSeek-API model.
+    codingModel: 'opencode-go/deepseek-v4-flash',
+    codingVisionModel: 'opencode-go/deepseek-v4-flash-vision-exp',
     escalationModel: 'deepseek/deepseek-v4-pro',
   },
   ollama: {
@@ -412,6 +415,7 @@ async function ensureOpenCodeRunner() {
   openCodeRunner = new OpenCodeRunner({
     dataService: ds,
     defaultModel: DEFAULT_MODEL_CONFIG.cloud.codingModel,
+    visionModel: DEFAULT_MODEL_CONFIG.cloud.codingVisionModel,
     escalationModel: DEFAULT_MODEL_CONFIG.cloud.escalationModel,
     onEvent: (event) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1626,6 +1630,7 @@ if (!app.requestSingleInstanceLock()) {
       void createHandoffHttpServer({
         dataService: ds,
         defaultModel: DEFAULT_MODEL_CONFIG.cloud.codingModel,
+        visionModel: DEFAULT_MODEL_CONFIG.cloud.codingVisionModel,
         token: process.env.CRON_CODE_HANDOFF_TOKEN || '',
         port: Number(process.env.CRON_CODE_HANDOFF_PORT || 0),
       })

@@ -78,6 +78,7 @@ export function humanizeSummary(text: string | null | undefined): string {
 const FRIENDLY_MODEL_NAMES: Record<string, string> = {
   'deepseek/deepseek-v4-flash': 'DeepSeek V4 Flash',
   'deepseek/deepseek-v4-pro': 'DeepSeek V4 Pro (deeper reasoning)',
+  'opencode-go/deepseek-v4-flash': 'DeepSeek V4 Flash',
   'opencode-go/deepseek-v4-flash-vision-exp': 'DeepSeek V4 Flash Vision',
 };
 

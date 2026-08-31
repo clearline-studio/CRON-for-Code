@@ -223,7 +223,7 @@ describe('OpenCode server adapter (verified installed API)', () => {
           { permission: 'bash', pattern: '*', action: 'ask' },
         ]),
       });
-      expect(messagePost?.body).toMatchObject({ model: { providerID: 'opencode-go', modelID: 'deepseek-v4-flash-vision-exp' } });
+      expect(messagePost?.body).toMatchObject({ model: { providerID: 'opencode-go', modelID: 'deepseek-v4-flash' } });
       expect(permissionGet?.url).toContain('directory=');
 
       const reply = await runner.replyToApproval({ taskId, approvalId: first.approval!.approvalId, decision: 'approve' });

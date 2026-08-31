@@ -42,6 +42,7 @@ export interface HandoffRunnerOptions {
   /** Pre-built adapter, or omit to auto-discover the OpenCode CLI. */
   readonly adapter?: OpenCodeRunnerAdapter | null;
   readonly defaultModel?: string;
+  readonly visionModel?: string;
   readonly fallbackModel?: string;
   readonly escalationModel?: string;
   /** Max quiet time before a silent-hung attempt retries with the fallback. */
@@ -79,6 +80,7 @@ export class HandoffRunner {
       dataService: options.dataService,
       adapter: options.adapter === undefined ? discoverOpenCodeCli() : options.adapter,
       defaultModel: options.defaultModel,
+      visionModel: options.visionModel,
       fallbackModel: options.fallbackModel,
       escalationModel: options.escalationModel,
       stallTimeoutMs: options.stallTimeoutMs,
@@ -96,6 +98,7 @@ export class HandoffRunner {
         taskId: task.id,
         model: request.model,
         conversationContext: request.context?.conversation,
+        needsVision: this.requestNeedsVision(request),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -103,6 +106,15 @@ export class HandoffRunner {
     }
 
     return this.mapResult(request, result);
+  }
+
+  /** Auto-switch signal: run on the vision model when the task needs image input. */
+  private requestNeedsVision(request: HandoffRequest): boolean {
+    const hasImage = (request.context?.attachments ?? []).some(
+      (attachment) => attachment.kind === 'image' || (attachment.mime ?? '').startsWith('image/'),
+    );
+    if (hasImage) return true;
+    return /screenshot|visual(ly)?|image|look at the|ui design|mockup|layout picture/i.test(request.task);
   }
 
   /** Approve/reject a pending handoff approval and get the resumed result. */
