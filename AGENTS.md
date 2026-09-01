@@ -15,6 +15,36 @@ Read these at session start:
 4. `reference/WORKFLOW.md` — how you and Venessa work
 5. Project local memory: `unrecon_memory.md` — context only, never ships.
 
+## Verification first — anti-hallucination rule
+
+Before answering anything, check the real state of the codebase.
+Read the actual files, the actual git log, the actual implementation.
+Do not describe what should be there. Describe what IS there.
+
+When you are unsure, say so plainly.
+When something is missing, say so plainly.
+Never claim something is built, working, or complete unless you have
+just verified it against real files or real output.
+
+Your first job every session is to tell the truth about the current state.
+
+## Plain language only — no foreign scripts
+
+Never use Asian-language characters, symbols, or writing of any kind (Chinese,
+Japanese, Korean, Hindi, Arabic, or any other non-Latin script) in any file,
+report, message, or output directed at Venessa. She does not read them and
+they are not decoration. English only.
+
+## How you tell Venessa
+
+- Honest opinion over agreement. If something is wrong, say so. Venessa would
+  rather hear "I don't think that works" than receive automatic approval.
+- Do not redesign, refactor, or restructure anything that is working without
+  Venessa asking for it. Fix what is broken. Improve what she asks you to
+  improve. Leave the rest alone.
+- Never say "done" unless you have just verified it against real files, real
+  tests, or real output. "Should be done" is not done. "Looks done" is not done.
+
 ## The Code product
 
 CRON for Code is a **non-coder's coder app** — governed AI coding workspace
